@@ -33,7 +33,6 @@ export interface SupabaseChakra {
 export interface SupabaseIntensity {
   id: string;
   name: string;
-  level: number;
   description: string | null;
 }
 
@@ -154,8 +153,7 @@ export async function fetchIntensities(): Promise<SupabaseIntensity[]> {
   try {
     const { data, error } = await supabase
       .from('intensities')
-      .select('*')
-      .order('level', { ascending: true });
+      .select('id, name, description');
 
     if (error) {
       console.error('[Supabase] Error fetching intensities:', JSON.stringify(error, null, 2));
@@ -189,7 +187,6 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
         sleep_safe,
         trip_safe,
         contains_dissonance,
-        intensity:intensities(id, name, level, description),
         track_modalities(modality:modalities(id, name, description, image_url)),
         track_intentions(intention:intentions(id, name, description)),
         track_soundscapes(soundscape:soundscapes(id, name, description)),
@@ -214,7 +211,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
       contains_dissonance: track.contains_dissonance ?? false,
-      intensity: track.intensity || null,
+      intensity: null,
       modalities: (track.track_modalities || [])
         .map((tm: any) => tm.modality)
         .filter(Boolean),
@@ -273,7 +270,6 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
         sleep_safe,
         trip_safe,
         contains_dissonance,
-        intensity:intensities(id, name, level, description),
         track_modalities(modality:modalities(id, name, description, image_url)),
         track_intentions(intention:intentions(id, name, description)),
         track_soundscapes(soundscape:soundscapes(id, name, description)),
@@ -299,7 +295,7 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
       contains_dissonance: track.contains_dissonance ?? false,
-      intensity: track.intensity || null,
+      intensity: null,
       modalities: (track.track_modalities || [])
         .map((tm: any) => tm.modality)
         .filter(Boolean),
