@@ -3,7 +3,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Audio, AVPlaybackStatus, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
-import { Track, tracks as allTracks } from '@/mocks/audio';
+import { Track } from '@/mocks/audio';
+import { fetchTracks, SupabaseTrack } from '@/services/supabase';
+
+function transformTrack(track: SupabaseTrack): Track {
+  return {
+    id: track.id,
+    title: track.title,
+    duration: track.duration,
+    imageUrl: track.image_url,
+    audioUrl: track.audio_url,
+    modality: track.modality,
+    themes: track.themes || [],
+    intensity: track.intensity,
+    hasLyrics: track.has_lyrics,
+    hasVoice: track.has_voice,
+    sleepSafe: track.sleep_safe,
+    tripSafe: track.trip_safe,
+  };
+}
 
 export interface FlowFilters {
   sleepSafe: boolean;
@@ -37,6 +55,17 @@ const MEMBERSHIP_KEY = 'audio_membership';
 
 export const [AudioProvider, useAudio] = createContextHook(() => {
   const queryClient = useQueryClient();
+
+  const tracksQuery = useQuery({
+    queryKey: ['tracks'],
+    queryFn: async () => {
+      const supabaseTracks = await fetchTracks();
+      return supabaseTracks.map(transformTrack);
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const allTracks = useMemo(() => tracksQuery.data || [], [tracksQuery.data]);
   
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -147,7 +176,7 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
       
       return true;
     });
-  }, []);
+  }, [allTracks]);
 
   const loadAndPlayTrackRef = useRef<((track: Track) => Promise<void>) | null>(null);
 
@@ -345,12 +374,16 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     isTrackSaved,
     setMembership,
     getEligibleTracks,
+    allTracks,
+    isLoadingTracks: tracksQuery.isLoading,
+    tracksError: tracksQuery.error,
+    refetchTracks: tracksQuery.refetch,
   };
 });
 
 export function useSavedTracks(): Track[] {
-  const { savedTrackIds } = useAudio();
+  const { savedTrackIds, allTracks } = useAudio();
   return useMemo(() => {
     return allTracks.filter(track => savedTrackIds.includes(track.id));
-  }, [savedTrackIds]);
+  }, [savedTrackIds, allTracks]);
 }
