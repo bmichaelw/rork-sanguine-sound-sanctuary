@@ -200,7 +200,13 @@ export default function BrowseScreen() {
                 </View>
               </View>
               
-              <TouchableOpacity style={styles.trackPlayButton}>
+              <TouchableOpacity 
+                style={styles.trackPlayButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  playTrack(track);
+                }}
+              >
                 <Play size={18} color={Colors.dark.primary} fill={Colors.dark.primary} />
               </TouchableOpacity>
             </TouchableOpacity>
