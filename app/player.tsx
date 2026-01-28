@@ -215,7 +215,7 @@ export default function PlayerScreen() {
 
       <View style={styles.infoContainer}>
         <Text style={styles.title}>{currentTrack.title}</Text>
-        <Text style={styles.modality}>{currentTrack.modality}</Text>
+        <Text style={styles.modality}>{currentTrack.modalities.map(m => m.name).join(', ') || 'Sound Therapy'}</Text>
         
         <View style={styles.tags}>
           {currentTrack.sleepSafe && (

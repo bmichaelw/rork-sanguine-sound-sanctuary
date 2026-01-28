@@ -115,7 +115,7 @@ export default function SavedScreen() {
                 
                 <View style={styles.trackContent}>
                   <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
-                  <Text style={styles.trackModality}>{track.modality}</Text>
+                  <Text style={styles.trackModality}>{track.modalities.map(m => m.name).join(', ') || 'No modality'}</Text>
                   
                   <View style={styles.trackMeta}>
                     <Clock size={12} color={Colors.dark.textMuted} />

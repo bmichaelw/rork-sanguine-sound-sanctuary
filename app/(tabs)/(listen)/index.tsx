@@ -16,14 +16,14 @@ import { Play, Moon, Sparkles, Wind } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
-import { themes, collections } from '@/mocks/audio';
+import { Modality } from '@/mocks/audio';
 
 const { width } = Dimensions.get('window');
 
 export default function ListenScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { enterFlow, membership } = useAudio();
+  const { enterFlow, membership, allModalities } = useAudio();
   
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0.3)).current;
@@ -76,13 +76,13 @@ export default function ListenScreen() {
   const handleQuickFlow = (filter: string) => {
     switch (filter) {
       case 'sleep':
-        enterFlow({ sleepSafe: true, maxIntensity: 'gentle' });
+        enterFlow({ sleepSafe: true, maxIntensityLevel: 3 });
         break;
       case 'trip':
         enterFlow({ tripSafe: true });
         break;
       case 'breathwork':
-        enterFlow({ noLyrics: true });
+        enterFlow({ noVoice: true });
         break;
       default:
         enterFlow();
@@ -167,50 +167,33 @@ export default function ListenScreen() {
         </View>
 
         <View style={styles.themesSection}>
-          <Text style={styles.sectionLabel}>THEMES</Text>
+          <Text style={styles.sectionLabel}>MODALITIES</Text>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.themesScroll}
           >
-            {themes.map((theme) => (
+            {allModalities.map((modality: Modality) => (
               <TouchableOpacity 
-                key={theme.id}
+                key={modality.id}
                 style={styles.themeCard}
-                onPress={() => router.push(`/theme/${theme.id}`)}
+                onPress={() => router.push(`/theme/${modality.id}`)}
                 activeOpacity={0.8}
               >
-                <Image source={{ uri: theme.imageUrl }} style={styles.themeImage} />
+                <Image source={{ uri: modality.imageUrl || 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400' }} style={styles.themeImage} />
                 <LinearGradient
                   colors={['transparent', 'rgba(0,0,0,0.8)']}
                   style={styles.themeGradient}
                 />
                 <View style={styles.themeContent}>
-                  <Text style={styles.themeName}>{theme.name}</Text>
-                  <Text style={styles.themeCount}>{theme.trackCount} tracks</Text>
+                  <Text style={styles.themeName}>{modality.name}</Text>
                 </View>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
-        <View style={styles.collectionsSection}>
-          <Text style={styles.sectionLabel}>COLLECTIONS</Text>
-          {collections.map((collection) => (
-            <TouchableOpacity 
-              key={collection.id}
-              style={styles.collectionCard}
-              activeOpacity={0.8}
-            >
-              <Image source={{ uri: collection.imageUrl }} style={styles.collectionImage} />
-              <View style={styles.collectionContent}>
-                <Text style={styles.collectionName}>{collection.name}</Text>
-                <Text style={styles.collectionDescription}>{collection.description}</Text>
-                <Text style={styles.collectionCount}>{collection.trackIds.length} tracks</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Powered by Au'Dio</Text>
@@ -351,42 +334,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: Colors.dark.textMuted,
     marginTop: 4,
-  },
-  collectionsSection: {
-    paddingHorizontal: 20,
-    gap: 16,
-    marginBottom: 40,
-  },
-  collectionCard: {
-    flexDirection: 'row',
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.dark.borderSubtle,
-  },
-  collectionImage: {
-    width: 100,
-    height: 100,
-  },
-  collectionContent: {
-    flex: 1,
-    padding: 16,
-    justifyContent: 'center',
-  },
-  collectionName: {
-    ...typography.subtitle,
-    color: Colors.dark.text,
-  },
-  collectionDescription: {
-    ...typography.bodySmall,
-    color: Colors.dark.textMuted,
-    marginTop: 4,
-  },
-  collectionCount: {
-    ...typography.caption,
-    color: Colors.dark.textMuted,
-    marginTop: 8,
   },
   footer: {
     alignItems: 'center',
