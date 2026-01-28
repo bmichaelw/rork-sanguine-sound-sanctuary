@@ -26,8 +26,6 @@ export interface Chakra {
 export interface Intensity {
   id: string;
   name: string;
-  level?: number;
-  description: string | null;
 }
 
 export interface Track {

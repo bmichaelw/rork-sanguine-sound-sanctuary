@@ -56,7 +56,6 @@ function transformIntensity(i: SupabaseIntensity): Intensity {
   return {
     id: i.id,
     name: i.name,
-    description: i.description,
   };
 }
 
@@ -286,9 +285,7 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
       if (filters.noWords && track.words) return false;
       if (filters.noVoice && track.voice) return false;
       
-      if (track.intensity && track.intensity.level !== undefined && track.intensity.level > filters.maxIntensityLevel) {
-        return false;
-      }
+
 
       if (filters.modalityIds.length > 0) {
         const trackModalityIds = track.modalities.map(m => m.id);
