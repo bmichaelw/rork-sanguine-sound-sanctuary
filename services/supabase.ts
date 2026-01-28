@@ -18,7 +18,6 @@ export interface SupabaseTrack {
   has_voice: boolean;
   sleep_safe: boolean;
   trip_safe: boolean;
-  created_at?: string;
 }
 
 export interface SupabaseTheme {
@@ -44,7 +43,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
   try {
     const { data, error } = await supabase
       .from('tracks')
-      .select('*');
+      .select('id, title, duration, image_url, audio_url, modality, themes, intensity, has_lyrics, has_voice, sleep_safe, trip_safe');
 
     if (error) {
       console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
