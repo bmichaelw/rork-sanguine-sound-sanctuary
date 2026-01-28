@@ -211,7 +211,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
       contains_dissonance: track.contains_dissonance ?? false,
-      intensity: null,
+      intensity: undefined,
       modalities: (track.track_modalities || [])
         .map((tm: any) => tm.modality)
         .filter(Boolean),
@@ -295,7 +295,7 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
       contains_dissonance: track.contains_dissonance ?? false,
-      intensity: null,
+      intensity: undefined,
       modalities: (track.track_modalities || [])
         .map((tm: any) => tm.modality)
         .filter(Boolean),
