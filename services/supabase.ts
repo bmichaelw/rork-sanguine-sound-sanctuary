@@ -47,8 +47,8 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('[Supabase] Error fetching tracks:', error);
-    throw error;
+    console.error('[Supabase] Error fetching tracks:', error.message, error.code, error.details);
+    throw new Error(`Failed to fetch tracks: ${error.message}`);
   }
 
   console.log('[Supabase] Fetched tracks:', data?.length || 0);
@@ -62,8 +62,8 @@ export async function fetchThemes(): Promise<SupabaseTheme[]> {
     .select('*');
 
   if (error) {
-    console.error('[Supabase] Error fetching themes:', error);
-    throw error;
+    console.error('[Supabase] Error fetching themes:', error.message, error.code, error.details);
+    throw new Error(`Failed to fetch themes: ${error.message}`);
   }
 
   console.log('[Supabase] Fetched themes:', data?.length || 0);
@@ -77,8 +77,8 @@ export async function fetchCollections(): Promise<SupabaseCollection[]> {
     .select('*');
 
   if (error) {
-    console.error('[Supabase] Error fetching collections:', error);
-    throw error;
+    console.error('[Supabase] Error fetching collections:', error.message, error.code, error.details);
+    throw new Error(`Failed to fetch collections: ${error.message}`);
   }
 
   console.log('[Supabase] Fetched collections:', data?.length || 0);
