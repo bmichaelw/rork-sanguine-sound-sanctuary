@@ -44,8 +44,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
   try {
     const { data, error } = await supabase
       .from('tracks')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('*');
 
     if (error) {
       console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
