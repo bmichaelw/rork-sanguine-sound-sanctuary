@@ -3,8 +3,63 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Audio, AVPlaybackStatus, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
-import { Track } from '@/mocks/audio';
-import { fetchTracks, SupabaseTrack } from '@/services/supabase';
+import { Track, Modality, Intention, Soundscape, Chakra, Intensity } from '@/mocks/audio';
+import { 
+  fetchTracks, 
+  fetchModalities, 
+  fetchIntentions, 
+  fetchSoundscapes, 
+  fetchChakras, 
+  fetchIntensities,
+  SupabaseTrack,
+  SupabaseModality,
+  SupabaseIntention,
+  SupabaseSoundscape,
+  SupabaseChakra,
+  SupabaseIntensity,
+} from '@/services/supabase';
+
+function transformModality(m: SupabaseModality): Modality {
+  return {
+    id: m.id,
+    name: m.name,
+    description: m.description,
+    imageUrl: m.image_url,
+  };
+}
+
+function transformIntention(i: SupabaseIntention): Intention {
+  return {
+    id: i.id,
+    name: i.name,
+    description: i.description,
+  };
+}
+
+function transformSoundscape(s: SupabaseSoundscape): Soundscape {
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description,
+  };
+}
+
+function transformChakra(c: SupabaseChakra): Chakra {
+  return {
+    id: c.id,
+    name: c.name,
+    description: c.description,
+  };
+}
+
+function transformIntensity(i: SupabaseIntensity): Intensity {
+  return {
+    id: i.id,
+    name: i.name,
+    level: i.level,
+    description: i.description,
+  };
+}
 
 function transformTrack(track: SupabaseTrack): Track {
   return {
@@ -13,22 +68,31 @@ function transformTrack(track: SupabaseTrack): Track {
     duration: track.duration,
     imageUrl: track.image_url,
     audioUrl: track.audio_url,
-    modality: track.modality,
-    themes: track.themes || [],
-    intensity: track.intensity,
-    hasLyrics: track.has_lyrics,
-    hasVoice: track.has_voice,
+    intensityId: track.intensity_id,
+    intensity: track.intensity ? transformIntensity(track.intensity) : null,
+    channeled: track.channeled,
+    voice: track.voice,
+    words: track.words,
     sleepSafe: track.sleep_safe,
     tripSafe: track.trip_safe,
+    containsDissonance: track.contains_dissonance,
+    modalities: (track.modalities || []).map(transformModality),
+    intentions: (track.intentions || []).map(transformIntention),
+    soundscapes: (track.soundscapes || []).map(transformSoundscape),
+    chakras: (track.chakras || []).map(transformChakra),
   };
 }
 
 export interface FlowFilters {
   sleepSafe: boolean;
   tripSafe: boolean;
-  noLyrics: boolean;
+  noWords: boolean;
   noVoice: boolean;
-  maxIntensity: 'gentle' | 'moderate' | 'deep';
+  maxIntensityLevel: number;
+  modalityIds: string[];
+  intentionIds: string[];
+  soundscapeIds: string[];
+  chakraIds: string[];
 }
 
 export interface AudioState {
@@ -45,9 +109,13 @@ export interface AudioState {
 const defaultFilters: FlowFilters = {
   sleepSafe: false,
   tripSafe: false,
-  noLyrics: false,
+  noWords: false,
   noVoice: false,
-  maxIntensity: 'deep',
+  maxIntensityLevel: 10,
+  modalityIds: [],
+  intentionIds: [],
+  soundscapeIds: [],
+  chakraIds: [],
 };
 
 const SAVED_TRACKS_KEY = 'audio_saved_tracks';
@@ -65,7 +133,57 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     staleTime: 1000 * 60 * 5,
   });
 
+  const modalitiesQuery = useQuery({
+    queryKey: ['modalities'],
+    queryFn: async () => {
+      const data = await fetchModalities();
+      return data.map(transformModality);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const intentionsQuery = useQuery({
+    queryKey: ['intentions'],
+    queryFn: async () => {
+      const data = await fetchIntentions();
+      return data.map(transformIntention);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const soundscapesQuery = useQuery({
+    queryKey: ['soundscapes'],
+    queryFn: async () => {
+      const data = await fetchSoundscapes();
+      return data.map(transformSoundscape);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const chakrasQuery = useQuery({
+    queryKey: ['chakras'],
+    queryFn: async () => {
+      const data = await fetchChakras();
+      return data.map(transformChakra);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const intensitiesQuery = useQuery({
+    queryKey: ['intensities'],
+    queryFn: async () => {
+      const data = await fetchIntensities();
+      return data.map(transformIntensity);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
   const allTracks = useMemo(() => tracksQuery.data || [], [tracksQuery.data]);
+  const allModalities = useMemo(() => modalitiesQuery.data || [], [modalitiesQuery.data]);
+  const allIntentions = useMemo(() => intentionsQuery.data || [], [intentionsQuery.data]);
+  const allSoundscapes = useMemo(() => soundscapesQuery.data || [], [soundscapesQuery.data]);
+  const allChakras = useMemo(() => chakrasQuery.data || [], [chakrasQuery.data]);
+  const allIntensities = useMemo(() => intensitiesQuery.data || [], [intensitiesQuery.data]);
   
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -166,13 +284,40 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     return allTracks.filter(track => {
       if (filters.sleepSafe && !track.sleepSafe) return false;
       if (filters.tripSafe && !track.tripSafe) return false;
-      if (filters.noLyrics && track.hasLyrics) return false;
-      if (filters.noVoice && track.hasVoice) return false;
+      if (filters.noWords && track.words) return false;
+      if (filters.noVoice && track.voice) return false;
       
-      const intensityOrder = ['gentle', 'moderate', 'deep'];
-      const maxIndex = intensityOrder.indexOf(filters.maxIntensity);
-      const trackIndex = intensityOrder.indexOf(track.intensity);
-      if (trackIndex > maxIndex) return false;
+      if (track.intensity && track.intensity.level > filters.maxIntensityLevel) {
+        return false;
+      }
+
+      if (filters.modalityIds.length > 0) {
+        const trackModalityIds = track.modalities.map(m => m.id);
+        if (!filters.modalityIds.some(id => trackModalityIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (filters.intentionIds.length > 0) {
+        const trackIntentionIds = track.intentions.map(i => i.id);
+        if (!filters.intentionIds.some(id => trackIntentionIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (filters.soundscapeIds.length > 0) {
+        const trackSoundscapeIds = track.soundscapes.map(s => s.id);
+        if (!filters.soundscapeIds.some(id => trackSoundscapeIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (filters.chakraIds.length > 0) {
+        const trackChakraIds = track.chakras.map(c => c.id);
+        if (!filters.chakraIds.some(id => trackChakraIds.includes(id))) {
+          return false;
+        }
+      }
       
       return true;
     });
@@ -375,7 +520,13 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     setMembership,
     getEligibleTracks,
     allTracks,
+    allModalities,
+    allIntentions,
+    allSoundscapes,
+    allChakras,
+    allIntensities,
     isLoadingTracks: tracksQuery.isLoading,
+    isLoadingFilters: modalitiesQuery.isLoading || intentionsQuery.isLoading || soundscapesQuery.isLoading || chakrasQuery.isLoading || intensitiesQuery.isLoading,
     tracksError: tracksQuery.error,
     refetchTracks: tracksQuery.refetch,
   };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -6,7 +6,7 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Image,
-  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,37 +15,78 @@ import { Play, Clock, ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
-import { tracks, themes, formatDuration } from '@/mocks/audio';
+import { formatDuration, Track } from '@/mocks/audio';
 
-const { width } = Dimensions.get('window');
-
-export default function ThemeDetailScreen() {
+export default function ModalityDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { playTrack, enterFlow } = useAudio();
+  const { playTrack, allModalities, allTracks, isLoadingTracks } = useAudio();
 
-  const theme = themes.find(t => t.id === id);
-  const themeTracks = tracks.filter(track => 
-    track.themes.includes(id || '')
-  );
+  const modality = useMemo(() => {
+    return allModalities.find(m => m.id === id);
+  }, [allModalities, id]);
 
-  if (!theme) {
+  const modalityTracks = useMemo(() => {
+    return allTracks.filter(track => 
+      track.modalities.some(m => m.id === id)
+    );
+  }, [allTracks, id]);
+
+  if (isLoadingTracks) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <Text style={styles.emptyText}>Theme not found</Text>
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Stack.Screen 
+          options={{
+            headerTransparent: true,
+            headerTitle: '',
+            headerLeft: () => (
+              <TouchableOpacity 
+                onPress={() => router.back()}
+                style={styles.backButton}
+              >
+                <ArrowLeft color={Colors.dark.text} size={24} />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <ActivityIndicator size="large" color={Colors.dark.primary} />
       </View>
     );
   }
 
-  const handlePlayTrack = (track: typeof tracks[0]) => {
+  if (!modality) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <Stack.Screen 
+          options={{
+            headerTransparent: true,
+            headerTitle: '',
+            headerLeft: () => (
+              <TouchableOpacity 
+                onPress={() => router.back()}
+                style={styles.backButton}
+              >
+                <ArrowLeft color={Colors.dark.text} size={24} />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>Modality not found</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const handlePlayTrack = (track: Track) => {
     playTrack(track);
     router.push('/player');
   };
 
   const handlePlayAll = () => {
-    if (themeTracks.length > 0) {
-      playTrack(themeTracks[0]);
+    if (modalityTracks.length > 0) {
+      playTrack(modalityTracks[0]);
       router.push('/player');
     }
   };
@@ -73,33 +114,41 @@ export default function ThemeDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.heroSection}>
-          <Image source={{ uri: theme.imageUrl }} style={styles.heroImage} />
+          {modality.imageUrl ? (
+            <Image source={{ uri: modality.imageUrl }} style={styles.heroImage} />
+          ) : (
+            <View style={[styles.heroImage, styles.heroPlaceholder]} />
+          )}
           <LinearGradient
             colors={['transparent', 'rgba(10,10,15,0.8)', Colors.dark.background]}
             style={styles.heroGradient}
           />
           
           <View style={[styles.heroContent, { paddingTop: insets.top + 60 }]}>
-            <Text style={styles.themeName}>{theme.name}</Text>
-            <Text style={styles.themeDescription}>{theme.description}</Text>
+            <Text style={styles.modalityName}>{modality.name}</Text>
+            {modality.description && (
+              <Text style={styles.modalityDescription}>{modality.description}</Text>
+            )}
             
-            <TouchableOpacity 
-              style={styles.playAllButton}
-              onPress={handlePlayAll}
-              activeOpacity={0.8}
-            >
-              <Play size={18} color={Colors.dark.background} fill={Colors.dark.background} />
-              <Text style={styles.playAllText}>Play All</Text>
-            </TouchableOpacity>
+            {modalityTracks.length > 0 && (
+              <TouchableOpacity 
+                style={styles.playAllButton}
+                onPress={handlePlayAll}
+                activeOpacity={0.8}
+              >
+                <Play size={18} color={Colors.dark.background} fill={Colors.dark.background} />
+                <Text style={styles.playAllText}>Play All</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
         <View style={styles.tracksSection}>
           <Text style={styles.sectionLabel}>
-            {themeTracks.length} TRACK{themeTracks.length !== 1 ? 'S' : ''}
+            {modalityTracks.length} TRACK{modalityTracks.length !== 1 ? 'S' : ''}
           </Text>
           
-          {themeTracks.map((track, index) => (
+          {modalityTracks.map((track, index) => (
             <TouchableOpacity 
               key={track.id}
               style={styles.trackCard}
@@ -115,18 +164,29 @@ export default function ThemeDetailScreen() {
                 <View style={styles.trackMeta}>
                   <Clock size={12} color={Colors.dark.textMuted} />
                   <Text style={styles.trackDuration}>{formatDuration(track.duration)}</Text>
+                  {track.intensity && (
+                    <View style={styles.intensityBadge}>
+                      <Text style={styles.intensityText}>{track.intensity.name}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
               
-              <TouchableOpacity style={styles.trackPlayButton}>
+              <TouchableOpacity 
+                style={styles.trackPlayButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  playTrack(track);
+                }}
+              >
                 <Play size={16} color={Colors.dark.primary} fill={Colors.dark.primary} />
               </TouchableOpacity>
             </TouchableOpacity>
           ))}
 
-          {themeTracks.length === 0 && (
+          {modalityTracks.length === 0 && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No tracks in this theme yet</Text>
+              <Text style={styles.emptyText}>No tracks in this modality yet</Text>
             </View>
           )}
         </View>
@@ -139,6 +199,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
@@ -163,6 +227,9 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  heroPlaceholder: {
+    backgroundColor: Colors.dark.surfaceElevated,
+  },
   heroGradient: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -173,11 +240,11 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 24,
   },
-  themeName: {
+  modalityName: {
     ...typography.displayLarge,
     color: Colors.dark.text,
   },
-  themeDescription: {
+  modalityDescription: {
     ...typography.body,
     color: Colors.dark.textSecondary,
     marginTop: 8,
@@ -240,13 +307,25 @@ const styles = StyleSheet.create({
   trackMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     marginTop: 4,
   },
   trackDuration: {
     ...typography.caption,
     color: Colors.dark.textMuted,
     fontSize: 10,
+  },
+  intensityBadge: {
+    backgroundColor: Colors.dark.surfaceElevated,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    marginLeft: 4,
+  },
+  intensityText: {
+    ...typography.caption,
+    color: Colors.dark.textMuted,
+    fontSize: 9,
   },
   trackPlayButton: {
     width: 40,

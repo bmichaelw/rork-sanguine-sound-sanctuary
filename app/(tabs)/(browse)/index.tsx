@@ -7,52 +7,171 @@ import {
   TouchableOpacity, 
   Image,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Play, Clock, Mic, MicOff } from 'lucide-react-native';
+import { Play, Clock, Mic, MicOff, ChevronDown, ChevronUp, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
-import { themes, modalities, formatDuration, Track } from '@/mocks/audio';
+import { formatDuration, Track } from '@/mocks/audio';
 
 const { width } = Dimensions.get('window');
-
-type FilterType = 'all' | 'sleep' | 'trip' | 'voice' | 'noVoice';
 
 export default function BrowseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { playTrack, allTracks, isLoadingTracks } = useAudio();
+  const { 
+    playTrack, 
+    allTracks, 
+    allModalities,
+    allIntentions,
+    allSoundscapes,
+    allChakras,
+    allIntensities,
+    isLoadingTracks,
+    isLoadingFilters,
+  } = useAudio();
   
-  const [selectedModality, setSelectedModality] = useState('All');
-  const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
+  const [selectedModalityIds, setSelectedModalityIds] = useState<string[]>([]);
+  const [selectedIntentionIds, setSelectedIntentionIds] = useState<string[]>([]);
+  const [selectedSoundscapeIds, setSelectedSoundscapeIds] = useState<string[]>([]);
+  const [selectedChakraIds, setSelectedChakraIds] = useState<string[]>([]);
+  const [selectedIntensityIds, setSelectedIntensityIds] = useState<string[]>([]);
+  
+  const [sleepSafeFilter, setSleepSafeFilter] = useState(false);
+  const [tripSafeFilter, setTripSafeFilter] = useState(false);
+  const [voiceFilter, setVoiceFilter] = useState<'all' | 'voice' | 'noVoice'>('all');
+
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(prev => prev === section ? null : section);
+  };
+
+  const toggleFilter = (id: string, selected: string[], setSelected: (ids: string[]) => void) => {
+    if (selected.includes(id)) {
+      setSelected(selected.filter(i => i !== id));
+    } else {
+      setSelected([...selected, id]);
+    }
+  };
 
   const filteredTracks = useMemo(() => {
     return allTracks.filter((track: Track) => {
-      if (selectedModality !== 'All' && track.modality !== selectedModality) {
-        return false;
+      if (selectedModalityIds.length > 0) {
+        const trackModalityIds = track.modalities.map(m => m.id);
+        if (!selectedModalityIds.some(id => trackModalityIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (selectedIntentionIds.length > 0) {
+        const trackIntentionIds = track.intentions.map(i => i.id);
+        if (!selectedIntentionIds.some(id => trackIntentionIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (selectedSoundscapeIds.length > 0) {
+        const trackSoundscapeIds = track.soundscapes.map(s => s.id);
+        if (!selectedSoundscapeIds.some(id => trackSoundscapeIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (selectedChakraIds.length > 0) {
+        const trackChakraIds = track.chakras.map(c => c.id);
+        if (!selectedChakraIds.some(id => trackChakraIds.includes(id))) {
+          return false;
+        }
+      }
+
+      if (selectedIntensityIds.length > 0) {
+        if (!track.intensity || !selectedIntensityIds.includes(track.intensity.id)) {
+          return false;
+        }
       }
       
-      switch (selectedFilter) {
-        case 'sleep':
-          return track.sleepSafe;
-        case 'trip':
-          return track.tripSafe;
-        case 'voice':
-          return track.hasVoice;
-        case 'noVoice':
-          return !track.hasVoice;
-        default:
-          return true;
-      }
+      if (sleepSafeFilter && !track.sleepSafe) return false;
+      if (tripSafeFilter && !track.tripSafe) return false;
+      
+      if (voiceFilter === 'voice' && !track.voice) return false;
+      if (voiceFilter === 'noVoice' && track.voice) return false;
+
+      return true;
     });
-  }, [allTracks, selectedModality, selectedFilter]);
+  }, [allTracks, selectedModalityIds, selectedIntentionIds, selectedSoundscapeIds, selectedChakraIds, selectedIntensityIds, sleepSafeFilter, tripSafeFilter, voiceFilter]);
 
   const handlePlayTrack = (track: Track) => {
     playTrack(track);
     router.push('/player');
+  };
+
+  const handleModalityPress = (modalityId: string) => {
+    router.push(`/theme/${modalityId}`);
+  };
+
+  const isLoading = isLoadingTracks || isLoadingFilters;
+
+  const renderFilterSection = (
+    title: string,
+    sectionKey: string,
+    items: { id: string; name: string }[],
+    selectedIds: string[],
+    setSelectedIds: (ids: string[]) => void
+  ) => {
+    const isExpanded = expandedSection === sectionKey;
+    const hasSelection = selectedIds.length > 0;
+
+    return (
+      <View style={styles.filterSection}>
+        <TouchableOpacity 
+          style={styles.filterSectionHeader}
+          onPress={() => toggleSection(sectionKey)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.filterSectionTitleRow}>
+            <Text style={styles.filterSectionTitle}>{title}</Text>
+            {hasSelection && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{selectedIds.length}</Text>
+              </View>
+            )}
+          </View>
+          {isExpanded ? (
+            <ChevronUp size={18} color={Colors.dark.textMuted} />
+          ) : (
+            <ChevronDown size={18} color={Colors.dark.textMuted} />
+          )}
+        </TouchableOpacity>
+        
+        {isExpanded && (
+          <View style={styles.filterOptions}>
+            {items.map((item) => {
+              const isSelected = selectedIds.includes(item.id);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.filterOption, isSelected && styles.filterOptionSelected]}
+                  onPress={() => toggleFilter(item.id, selectedIds, setSelectedIds)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterOptionText, isSelected && styles.filterOptionTextSelected]}>
+                    {item.name}
+                  </Text>
+                  {isSelected && (
+                    <Check size={14} color={Colors.dark.primary} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -72,146 +191,153 @@ export default function BrowseScreen() {
         <Text style={styles.title}>Browse</Text>
         <Text style={styles.subtitle}>Explore the sanctuary</Text>
 
-        <View style={styles.themesSection}>
-          <Text style={styles.sectionLabel}>THEMES</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.themesScroll}
-          >
-            {themes.map((theme) => (
-              <TouchableOpacity 
-                key={theme.id}
-                style={styles.themeCard}
-                onPress={() => router.push(`/theme/${theme.id}`)}
-                activeOpacity={0.8}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.dark.primary} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.modalitiesSection}>
+              <Text style={styles.sectionLabel}>MODALITIES</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.modalitiesScroll}
               >
-                <Image source={{ uri: theme.imageUrl }} style={styles.themeImage} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.85)']}
-                  style={styles.themeGradient}
-                />
-                <View style={styles.themeContent}>
-                  <Text style={styles.themeName}>{theme.name}</Text>
-                  <Text style={styles.themeDescription}>{theme.description}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+                {allModalities.map((modality) => (
+                  <TouchableOpacity 
+                    key={modality.id}
+                    style={styles.modalityCard}
+                    onPress={() => handleModalityPress(modality.id)}
+                    activeOpacity={0.8}
+                  >
+                    {modality.imageUrl ? (
+                      <Image source={{ uri: modality.imageUrl }} style={styles.modalityImage} />
+                    ) : (
+                      <View style={[styles.modalityImage, styles.modalityPlaceholder]} />
+                    )}
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.85)']}
+                      style={styles.modalityGradient}
+                    />
+                    <View style={styles.modalityContent}>
+                      <Text style={styles.modalityName}>{modality.name}</Text>
+                      {modality.description && (
+                        <Text style={styles.modalityDescription} numberOfLines={2}>
+                          {modality.description}
+                        </Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
-        <View style={styles.filtersSection}>
-          <Text style={styles.sectionLabel}>MODALITY</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersScroll}
-          >
-            {modalities.map((modality) => (
-              <TouchableOpacity 
-                key={modality}
-                style={[
-                  styles.filterChip,
-                  selectedModality === modality && styles.filterChipActive
-                ]}
-                onPress={() => setSelectedModality(modality)}
-              >
-                <Text style={[
-                  styles.filterChipText,
-                  selectedModality === modality && styles.filterChipTextActive
-                ]}>
-                  {modality}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        <View style={styles.quickFilters}>
-          <TouchableOpacity 
-            style={[styles.quickFilter, selectedFilter === 'sleep' && styles.quickFilterActive]}
-            onPress={() => setSelectedFilter(selectedFilter === 'sleep' ? 'all' : 'sleep')}
-          >
-            <Text style={[styles.quickFilterText, selectedFilter === 'sleep' && styles.quickFilterTextActive]}>
-              Sleep Safe
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.quickFilter, selectedFilter === 'trip' && styles.quickFilterActive]}
-            onPress={() => setSelectedFilter(selectedFilter === 'trip' ? 'all' : 'trip')}
-          >
-            <Text style={[styles.quickFilterText, selectedFilter === 'trip' && styles.quickFilterTextActive]}>
-              Journey Safe
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.quickFilter, selectedFilter === 'voice' && styles.quickFilterActive]}
-            onPress={() => setSelectedFilter(selectedFilter === 'voice' ? 'all' : 'voice')}
-          >
-            <Mic size={14} color={selectedFilter === 'voice' ? Colors.dark.primary : Colors.dark.textMuted} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.quickFilter, selectedFilter === 'noVoice' && styles.quickFilterActive]}
-            onPress={() => setSelectedFilter(selectedFilter === 'noVoice' ? 'all' : 'noVoice')}
-          >
-            <MicOff size={14} color={selectedFilter === 'noVoice' ? Colors.dark.primary : Colors.dark.textMuted} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.tracksSection}>
-          <Text style={styles.sectionLabel}>
-            {filteredTracks.length} TRACK{filteredTracks.length !== 1 ? 'S' : ''}
-          </Text>
-          
-          {filteredTracks.map((track: Track) => (
-            <TouchableOpacity 
-              key={track.id}
-              style={styles.trackCard}
-              onPress={() => handlePlayTrack(track)}
-              activeOpacity={0.7}
-            >
-              <Image source={{ uri: track.imageUrl }} style={styles.trackImage} />
+            <View style={styles.filtersContainer}>
+              <Text style={styles.sectionLabel}>FILTERS</Text>
               
-              <View style={styles.trackContent}>
-                <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
-                <Text style={styles.trackModality}>{track.modality}</Text>
+              <View style={styles.quickFilters}>
+                <TouchableOpacity 
+                  style={[styles.quickFilter, sleepSafeFilter && styles.quickFilterActive]}
+                  onPress={() => setSleepSafeFilter(!sleepSafeFilter)}
+                >
+                  <Text style={[styles.quickFilterText, sleepSafeFilter && styles.quickFilterTextActive]}>
+                    Sleep Safe
+                  </Text>
+                </TouchableOpacity>
                 
-                <View style={styles.trackMeta}>
-                  <View style={styles.trackDuration}>
-                    <Clock size={12} color={Colors.dark.textMuted} />
-                    <Text style={styles.trackDurationText}>{formatDuration(track.duration)}</Text>
+                <TouchableOpacity 
+                  style={[styles.quickFilter, tripSafeFilter && styles.quickFilterActive]}
+                  onPress={() => setTripSafeFilter(!tripSafeFilter)}
+                >
+                  <Text style={[styles.quickFilterText, tripSafeFilter && styles.quickFilterTextActive]}>
+                    Journey Safe
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.quickFilter, voiceFilter === 'voice' && styles.quickFilterActive]}
+                  onPress={() => setVoiceFilter(voiceFilter === 'voice' ? 'all' : 'voice')}
+                >
+                  <Mic size={14} color={voiceFilter === 'voice' ? Colors.dark.primary : Colors.dark.textMuted} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.quickFilter, voiceFilter === 'noVoice' && styles.quickFilterActive]}
+                  onPress={() => setVoiceFilter(voiceFilter === 'noVoice' ? 'all' : 'noVoice')}
+                >
+                  <MicOff size={14} color={voiceFilter === 'noVoice' ? Colors.dark.primary : Colors.dark.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              {renderFilterSection('Intention', 'intention', allIntentions, selectedIntentionIds, setSelectedIntentionIds)}
+              {renderFilterSection('Soundscape', 'soundscape', allSoundscapes, selectedSoundscapeIds, setSelectedSoundscapeIds)}
+              {renderFilterSection('Chakra', 'chakra', allChakras, selectedChakraIds, setSelectedChakraIds)}
+              {renderFilterSection('Intensity', 'intensity', allIntensities, selectedIntensityIds, setSelectedIntensityIds)}
+            </View>
+
+            <View style={styles.tracksSection}>
+              <Text style={styles.sectionLabel}>
+                {filteredTracks.length} TRACK{filteredTracks.length !== 1 ? 'S' : ''}
+              </Text>
+              
+              {filteredTracks.map((track: Track) => (
+                <TouchableOpacity 
+                  key={track.id}
+                  style={styles.trackCard}
+                  onPress={() => handlePlayTrack(track)}
+                  activeOpacity={0.7}
+                >
+                  <Image source={{ uri: track.imageUrl }} style={styles.trackImage} />
+                  
+                  <View style={styles.trackContent}>
+                    <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
+                    <Text style={styles.trackModality} numberOfLines={1}>
+                      {track.modalities.map(m => m.name).join(', ') || 'No modality'}
+                    </Text>
+                    
+                    <View style={styles.trackMeta}>
+                      <View style={styles.trackDuration}>
+                        <Clock size={12} color={Colors.dark.textMuted} />
+                        <Text style={styles.trackDurationText}>{formatDuration(track.duration)}</Text>
+                      </View>
+                      
+                      <View style={styles.trackTags}>
+                        {track.sleepSafe && (
+                          <View style={styles.trackTag}>
+                            <Text style={styles.trackTagText}>Sleep</Text>
+                          </View>
+                        )}
+                        {track.tripSafe && (
+                          <View style={styles.trackTag}>
+                            <Text style={styles.trackTagText}>Journey</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
                   
-                  <View style={styles.trackTags}>
-                    {track.sleepSafe && (
-                      <View style={styles.trackTag}>
-                        <Text style={styles.trackTagText}>Sleep</Text>
-                      </View>
-                    )}
-                    {track.tripSafe && (
-                      <View style={styles.trackTag}>
-                        <Text style={styles.trackTagText}>Journey</Text>
-                      </View>
-                    )}
-                  </View>
+                  <TouchableOpacity 
+                    style={styles.trackPlayButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      playTrack(track);
+                    }}
+                  >
+                    <Play size={18} color={Colors.dark.primary} fill={Colors.dark.primary} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+
+              {filteredTracks.length === 0 && (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyText}>No tracks match your filters</Text>
                 </View>
-              </View>
-              
-              <TouchableOpacity 
-                style={styles.trackPlayButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  playTrack(track);
-                }}
-              >
-                <Play size={18} color={Colors.dark.primary} fill={Colors.dark.primary} />
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-        </View>
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -240,81 +366,71 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 30,
   },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.body,
+    color: Colors.dark.textMuted,
+    marginTop: 12,
+  },
   sectionLabel: {
     ...typography.caption,
     color: Colors.dark.textMuted,
     paddingHorizontal: 20,
     marginBottom: 12,
   },
-  themesSection: {
+  modalitiesSection: {
     marginBottom: 30,
   },
-  themesScroll: {
+  modalitiesScroll: {
     paddingHorizontal: 20,
     gap: 12,
   },
-  themeCard: {
+  modalityCard: {
     width: width * 0.65,
-    height: 140,
+    height: 160,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: Colors.dark.surface,
   },
-  themeImage: {
+  modalityImage: {
     ...StyleSheet.absoluteFillObject,
     width: '100%',
     height: '100%',
   },
-  themeGradient: {
+  modalityPlaceholder: {
+    backgroundColor: Colors.dark.surfaceElevated,
+  },
+  modalityGradient: {
     ...StyleSheet.absoluteFillObject,
   },
-  themeContent: {
+  modalityContent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     padding: 16,
   },
-  themeName: {
+  modalityName: {
     ...typography.subtitle,
     color: Colors.dark.text,
+    fontSize: 18,
   },
-  themeDescription: {
+  modalityDescription: {
     ...typography.bodySmall,
     color: Colors.dark.textSecondary,
     marginTop: 4,
   },
-  filtersSection: {
-    marginBottom: 16,
-  },
-  filtersScroll: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  filterChip: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Colors.dark.surface,
-    borderWidth: 1,
-    borderColor: Colors.dark.borderSubtle,
-  },
-  filterChipActive: {
-    backgroundColor: Colors.dark.primaryGlow,
-    borderColor: Colors.dark.primary,
-  },
-  filterChipText: {
-    ...typography.bodySmall,
-    color: Colors.dark.textSecondary,
-  },
-  filterChipTextActive: {
-    color: Colors.dark.primary,
+  filtersContainer: {
+    marginBottom: 24,
   },
   quickFilters: {
     flexDirection: 'row',
     paddingHorizontal: 20,
     gap: 8,
-    marginBottom: 30,
+    marginBottom: 16,
   },
   quickFilter: {
     paddingVertical: 8,
@@ -331,9 +447,73 @@ const styles = StyleSheet.create({
   quickFilterText: {
     ...typography.caption,
     color: Colors.dark.textMuted,
-    fontSize: 10,
+    fontSize: 11,
   },
   quickFilterTextActive: {
+    color: Colors.dark.primary,
+  },
+  filterSection: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: Colors.dark.borderSubtle,
+  },
+  filterSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  filterSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterSectionTitle: {
+    ...typography.subtitle,
+    color: Colors.dark.text,
+    fontSize: 14,
+  },
+  filterBadge: {
+    backgroundColor: Colors.dark.primary,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  filterBadgeText: {
+    ...typography.caption,
+    color: Colors.dark.background,
+    fontSize: 10,
+    fontWeight: '600' as const,
+  },
+  filterOptions: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    gap: 6,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.surfaceElevated,
+  },
+  filterOptionSelected: {
+    backgroundColor: Colors.dark.primaryGlow,
+    borderWidth: 1,
+    borderColor: Colors.dark.primary,
+  },
+  filterOptionText: {
+    ...typography.body,
+    color: Colors.dark.textSecondary,
+    fontSize: 13,
+  },
+  filterOptionTextSelected: {
     color: Colors.dark.primary,
   },
   tracksSection: {
@@ -405,5 +585,13 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyState: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    ...typography.body,
+    color: Colors.dark.textMuted,
   },
 });
