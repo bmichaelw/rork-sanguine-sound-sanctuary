@@ -15,7 +15,7 @@ import { Play, Clock, Mic, MicOff } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
-import { tracks, themes, modalities, formatDuration } from '@/mocks/audio';
+import { themes, modalities, formatDuration, Track } from '@/mocks/audio';
 
 const { width } = Dimensions.get('window');
 
@@ -24,7 +24,7 @@ type FilterType = 'all' | 'sleep' | 'trip' | 'voice' | 'noVoice';
 export default function BrowseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { playTrack } = useAudio();
+  const { playTrack, tracks, isLoading } = useAudio();
   
   const [selectedModality, setSelectedModality] = useState('All');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
@@ -48,9 +48,9 @@ export default function BrowseScreen() {
           return true;
       }
     });
-  }, [selectedModality, selectedFilter]);
+  }, [tracks, selectedModality, selectedFilter]);
 
-  const handlePlayTrack = (track: typeof tracks[0]) => {
+  const handlePlayTrack = (track: Track) => {
     playTrack(track);
     router.push('/player');
   };
