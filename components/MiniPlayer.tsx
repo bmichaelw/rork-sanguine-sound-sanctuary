@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Play, Pause } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -8,7 +8,7 @@ import { formatDuration } from '@/mocks/audio';
 
 export default function MiniPlayer() {
   const router = useRouter();
-  const { currentTrack, isPlaying, togglePlayPause, progress, duration } = useAudio();
+  const { currentTrack, isPlaying, isLoading, isBuffering, togglePlayPause, progress, duration } = useAudio();
 
   if (!currentTrack) return null;
 
@@ -41,8 +41,11 @@ export default function MiniPlayer() {
             togglePlayPause();
           }}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          disabled={isLoading}
         >
-          {isPlaying ? (
+          {isLoading || isBuffering ? (
+            <ActivityIndicator size="small" color={Colors.dark.primary} />
+          ) : isPlaying ? (
             <Pause color={Colors.dark.primary} size={24} fill={Colors.dark.primary} />
           ) : (
             <Play color={Colors.dark.primary} size={24} fill={Colors.dark.primary} />

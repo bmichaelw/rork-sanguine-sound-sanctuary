@@ -3,6 +3,7 @@ export interface Track {
   title: string;
   duration: number;
   imageUrl: string;
+  audioUrl: string;
   modality: string;
   themes: string[];
   intensity: 'gentle' | 'moderate' | 'deep';
@@ -33,8 +34,9 @@ export const tracks: Track[] = [
   {
     id: '1',
     title: 'Temple of Stillness',
-    duration: 1847,
+    duration: 180,
     imageUrl: 'https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
     modality: 'Ambient Drone',
     themes: ['meditation', 'stillness'],
     intensity: 'gentle',
@@ -46,8 +48,9 @@ export const tracks: Track[] = [
   {
     id: '2',
     title: 'Golden Hour Descent',
-    duration: 2234,
+    duration: 210,
     imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
     modality: 'Sound Bath',
     themes: ['transition', 'release'],
     intensity: 'moderate',
@@ -59,8 +62,9 @@ export const tracks: Track[] = [
   {
     id: '3',
     title: 'Ceremonial Waters',
-    duration: 3124,
+    duration: 240,
     imageUrl: 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
     modality: 'Ceremony',
     themes: ['ceremony', 'purification'],
     intensity: 'deep',
@@ -72,8 +76,9 @@ export const tracks: Track[] = [
   {
     id: '4',
     title: 'Breath of Stars',
-    duration: 1567,
+    duration: 195,
     imageUrl: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
     modality: 'Breathwork',
     themes: ['breathwork', 'expansion'],
     intensity: 'moderate',
@@ -85,8 +90,9 @@ export const tracks: Track[] = [
   {
     id: '5',
     title: 'Into the Void',
-    duration: 2891,
+    duration: 225,
     imageUrl: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3',
     modality: 'Deep Drone',
     themes: ['dissolution', 'void'],
     intensity: 'deep',
@@ -98,8 +104,9 @@ export const tracks: Track[] = [
   {
     id: '6',
     title: 'Lullaby for the Soul',
-    duration: 1234,
+    duration: 165,
     imageUrl: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3',
     modality: 'Sleep Music',
     themes: ['sleep', 'comfort'],
     intensity: 'gentle',
@@ -111,8 +118,9 @@ export const tracks: Track[] = [
   {
     id: '7',
     title: 'Sacred Geometry',
-    duration: 2456,
+    duration: 200,
     imageUrl: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3',
     modality: 'Binaural',
     themes: ['focus', 'clarity'],
     intensity: 'moderate',
@@ -124,8 +132,9 @@ export const tracks: Track[] = [
   {
     id: '8',
     title: 'Earth Mother',
-    duration: 3456,
+    duration: 185,
     imageUrl: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800',
+    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3',
     modality: 'Nature Sounds',
     themes: ['grounding', 'nature'],
     intensity: 'gentle',

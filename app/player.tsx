@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -8,6 +8,9 @@ import {
   Animated,
   Dimensions,
   Platform,
+  ActivityIndicator,
+  GestureResponderEvent,
+  LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +30,7 @@ import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
 import { formatDuration } from '@/mocks/audio';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export default function PlayerScreen() {
   const router = useRouter();
@@ -38,15 +41,45 @@ export default function PlayerScreen() {
     isFlowMode,
     togglePlayPause, 
     skipToNext,
+    seekTo,
     progress,
     duration,
+    isLoading,
+    isBuffering,
     toggleSaveTrack,
     isTrackSaved,
   } = useAudio();
 
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const [seekPosition, setSeekPosition] = useState(0);
+
   const breatheAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
   const artworkScale = useRef(new Animated.Value(1)).current;
+
+  const handleProgressBarLayout = (event: LayoutChangeEvent) => {
+    setProgressBarWidth(event.nativeEvent.layout.width);
+  };
+
+  const handleSeek = (event: GestureResponderEvent) => {
+    if (progressBarWidth === 0 || duration === 0) return;
+    
+    const locationX = event.nativeEvent.locationX;
+    const percentage = Math.max(0, Math.min(1, locationX / progressBarWidth));
+    const newPosition = Math.floor(percentage * duration);
+    
+    setSeekPosition(newPosition);
+    setIsSeeking(true);
+  };
+
+  const handleSeekRelease = () => {
+    if (isSeeking) {
+      console.log('[Player] Seeking to:', seekPosition);
+      seekTo(seekPosition);
+      setIsSeeking(false);
+    }
+  };
 
   useEffect(() => {
     const breathe = Animated.loop(
@@ -199,13 +232,28 @@ export default function PlayerScreen() {
       </View>
 
       <View style={styles.progressContainer}>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-        </View>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={handleSeek}
+          onPressOut={handleSeekRelease}
+          onLayout={handleProgressBarLayout}
+          style={styles.progressBarTouchable}
+        >
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${isSeeking ? (seekPosition / duration) * 100 : progressPercent}%` }]} />
+            <View style={[styles.progressThumb, { left: `${isSeeking ? (seekPosition / duration) * 100 : progressPercent}%` }]} />
+          </View>
+        </TouchableOpacity>
         <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>{formatDuration(progress)}</Text>
+          <Text style={styles.timeText}>{formatDuration(isSeeking ? seekPosition : progress)}</Text>
           <Text style={styles.timeText}>{formatDuration(duration)}</Text>
         </View>
+        {isBuffering && (
+          <View style={styles.bufferingContainer}>
+            <ActivityIndicator size="small" color={Colors.dark.primary} />
+            <Text style={styles.bufferingText}>Buffering...</Text>
+          </View>
+        )}
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + 40 }]}>
@@ -224,12 +272,15 @@ export default function PlayerScreen() {
           style={styles.playButton}
           onPress={handlePlayPause}
           activeOpacity={0.8}
+          disabled={isLoading}
         >
           <LinearGradient
             colors={[Colors.dark.primaryGlow, 'transparent']}
             style={StyleSheet.absoluteFill}
           />
-          {isPlaying ? (
+          {isLoading ? (
+            <ActivityIndicator size="large" color={Colors.dark.primary} />
+          ) : isPlaying ? (
             <Pause color={Colors.dark.primary} size={36} fill={Colors.dark.primary} />
           ) : (
             <Play color={Colors.dark.primary} size={36} fill={Colors.dark.primary} />
@@ -358,16 +409,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     marginTop: 30,
   },
+  progressBarTouchable: {
+    paddingVertical: 10,
+  },
   progressBar: {
-    height: 3,
+    height: 4,
     backgroundColor: Colors.dark.surface,
     borderRadius: 2,
-    overflow: 'hidden',
+    position: 'relative',
   },
   progressFill: {
     height: '100%',
     backgroundColor: Colors.dark.primary,
     borderRadius: 2,
+  },
+  progressThumb: {
+    position: 'absolute',
+    top: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: Colors.dark.primary,
+    marginLeft: -6,
+  },
+  bufferingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  bufferingText: {
+    ...typography.caption,
+    color: Colors.dark.textMuted,
   },
   timeContainer: {
     flexDirection: 'row',

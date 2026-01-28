@@ -1,7 +1,8 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Audio, AVPlaybackStatus, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { Track, tracks as allTracks } from '@/mocks/audio';
 
 export interface FlowFilters {
@@ -19,6 +20,8 @@ export interface AudioState {
   flowFilters: FlowFilters;
   progress: number;
   duration: number;
+  isLoading: boolean;
+  isBuffering: boolean;
 }
 
 const defaultFilters: FlowFilters = {
@@ -41,6 +44,51 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
   const [flowFilters, setFlowFilters] = useState<FlowFilters>(defaultFilters);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
+  
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const isFlowModeRef = useRef(isFlowMode);
+  const flowFiltersRef = useRef(flowFilters);
+  const currentTrackRef = useRef(currentTrack);
+
+  useEffect(() => {
+    isFlowModeRef.current = isFlowMode;
+  }, [isFlowMode]);
+
+  useEffect(() => {
+    flowFiltersRef.current = flowFilters;
+  }, [flowFilters]);
+
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  useEffect(() => {
+    const setupAudioMode = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+        });
+        console.log('[AudioProvider] Audio mode configured for background playback');
+      } catch (error) {
+        console.error('[AudioProvider] Error setting audio mode:', error);
+      }
+    };
+    setupAudioMode();
+
+    return () => {
+      if (soundRef.current) {
+        console.log('[AudioProvider] Cleanup: unloading sound');
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
   const savedTracksQuery = useQuery({
     queryKey: ['savedTracks'],
@@ -82,7 +130,7 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     },
   });
 
-  const savedTrackIds = savedTracksQuery.data || [];
+  const savedTrackIds = useMemo(() => savedTracksQuery.data || [], [savedTracksQuery.data]);
   const membership = membershipQuery.data || { isPaid: false, tier: 'free' };
 
   const getEligibleTracks = useCallback((filters: FlowFilters): Track[] => {
@@ -101,6 +149,84 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     });
   }, []);
 
+  const loadAndPlayTrackRef = useRef<((track: Track) => Promise<void>) | null>(null);
+
+  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (!status.isLoaded) {
+      if (status.error) {
+        console.error('[AudioProvider] Playback error:', status.error);
+      }
+      return;
+    }
+
+    setIsBuffering(status.isBuffering);
+    setIsPlaying(status.isPlaying);
+    
+    const progressSeconds = Math.floor(status.positionMillis / 1000);
+    const durationSeconds = Math.floor((status.durationMillis || 0) / 1000);
+    
+    setProgress(progressSeconds);
+    if (status.durationMillis) {
+      setDuration(durationSeconds);
+    }
+
+    if (status.didJustFinish && !status.isLooping) {
+      console.log('[AudioProvider] Track finished');
+      if (isFlowModeRef.current) {
+        const eligible = getEligibleTracks(flowFiltersRef.current);
+        const remaining = eligible.filter(t => t.id !== currentTrackRef.current?.id);
+        if (remaining.length > 0) {
+          const next = remaining[Math.floor(Math.random() * remaining.length)];
+          console.log('[AudioProvider] Flow mode: playing next track:', next.title);
+          loadAndPlayTrackRef.current?.(next);
+        } else {
+          console.log('[AudioProvider] Flow mode: no more eligible tracks');
+          setIsPlaying(false);
+        }
+      } else {
+        setIsPlaying(false);
+        setProgress(0);
+      }
+    }
+  }, [getEligibleTracks]);
+
+  const loadAndPlayTrack = useCallback(async (track: Track) => {
+    console.log('[AudioProvider] Loading track:', track.title);
+    setIsLoading(true);
+
+    try {
+      if (soundRef.current) {
+        console.log('[AudioProvider] Unloading previous sound');
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      setCurrentTrack(track);
+      setProgress(0);
+      setDuration(track.duration);
+
+      console.log('[AudioProvider] Creating sound from URL:', track.audioUrl);
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: track.audioUrl },
+        { shouldPlay: true, progressUpdateIntervalMillis: 500 },
+        handlePlaybackStatusUpdate
+      );
+
+      soundRef.current = sound;
+      setIsPlaying(true);
+      setIsLoading(false);
+      console.log('[AudioProvider] Track loaded and playing');
+    } catch (error) {
+      console.error('[AudioProvider] Error loading track:', error);
+      setIsLoading(false);
+      setIsPlaying(false);
+    }
+  }, [handlePlaybackStatusUpdate]);
+
+  useEffect(() => {
+    loadAndPlayTrackRef.current = loadAndPlayTrack;
+  }, [loadAndPlayTrack]);
+
   const enterFlow = useCallback((filters?: Partial<FlowFilters>) => {
     const mergedFilters = { ...flowFilters, ...filters };
     setFlowFilters(mergedFilters);
@@ -109,23 +235,37 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     const eligible = getEligibleTracks(mergedFilters);
     if (eligible.length > 0) {
       const randomTrack = eligible[Math.floor(Math.random() * eligible.length)];
-      setCurrentTrack(randomTrack);
-      setDuration(randomTrack.duration);
-      setProgress(0);
-      setIsPlaying(true);
+      console.log('[AudioProvider] Entering flow mode with track:', randomTrack.title);
+      loadAndPlayTrack(randomTrack);
     }
-  }, [flowFilters, getEligibleTracks]);
+  }, [flowFilters, getEligibleTracks, loadAndPlayTrack]);
 
   const playTrack = useCallback((track: Track) => {
-    setCurrentTrack(track);
-    setDuration(track.duration);
-    setProgress(0);
-    setIsPlaying(true);
+    console.log('[AudioProvider] Playing single track:', track.title);
     setIsFlowMode(false);
-  }, []);
+    loadAndPlayTrack(track);
+  }, [loadAndPlayTrack]);
 
-  const togglePlayPause = useCallback(() => {
-    setIsPlaying(prev => !prev);
+  const togglePlayPause = useCallback(async () => {
+    if (!soundRef.current) {
+      console.log('[AudioProvider] No sound loaded');
+      return;
+    }
+
+    try {
+      const status = await soundRef.current.getStatusAsync();
+      if (!status.isLoaded) return;
+
+      if (status.isPlaying) {
+        console.log('[AudioProvider] Pausing');
+        await soundRef.current.pauseAsync();
+      } else {
+        console.log('[AudioProvider] Resuming');
+        await soundRef.current.playAsync();
+      }
+    } catch (error) {
+      console.error('[AudioProvider] Error toggling play/pause:', error);
+    }
   }, []);
 
   const skipToNext = useCallback(() => {
@@ -134,51 +274,54 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
       const remaining = eligible.filter(t => t.id !== currentTrack?.id);
       if (remaining.length > 0) {
         const next = remaining[Math.floor(Math.random() * remaining.length)];
-        setCurrentTrack(next);
-        setDuration(next.duration);
-        setProgress(0);
+        console.log('[AudioProvider] Skipping to next track:', next.title);
+        loadAndPlayTrack(next);
       }
     }
-  }, [isFlowMode, flowFilters, currentTrack, getEligibleTracks]);
+  }, [isFlowMode, flowFilters, currentTrack, getEligibleTracks, loadAndPlayTrack]);
 
-  const exitFlow = useCallback(() => {
+  const seekTo = useCallback(async (positionSeconds: number) => {
+    if (!soundRef.current) return;
+
+    try {
+      console.log('[AudioProvider] Seeking to:', positionSeconds);
+      await soundRef.current.setPositionAsync(positionSeconds * 1000);
+    } catch (error) {
+      console.error('[AudioProvider] Error seeking:', error);
+    }
+  }, []);
+
+  const exitFlow = useCallback(async () => {
+    console.log('[AudioProvider] Exiting flow mode');
     setIsFlowMode(false);
     setIsPlaying(false);
     setCurrentTrack(null);
     setProgress(0);
+
+    if (soundRef.current) {
+      try {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      } catch (error) {
+        console.error('[AudioProvider] Error stopping sound:', error);
+      }
+    }
   }, []);
 
+  const { mutate: saveTrackMutate } = saveMutation;
   const toggleSaveTrack = useCallback((trackId: string) => {
-    saveMutation.mutate(trackId);
-  }, [saveMutation]);
+    saveTrackMutate(trackId);
+  }, [saveTrackMutate]);
 
   const isTrackSaved = useCallback((trackId: string) => {
     return savedTrackIds.includes(trackId);
   }, [savedTrackIds]);
 
+  const { mutate: setMembershipMutate } = membershipMutation;
   const setMembership = useCallback((isPaid: boolean, tier: string = 'sanguine') => {
-    membershipMutation.mutate({ isPaid, tier });
-  }, [membershipMutation]);
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (isPlaying && currentTrack) {
-      interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev >= duration) {
-            if (isFlowMode) {
-              skipToNext();
-            } else {
-              setIsPlaying(false);
-            }
-            return 0;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, currentTrack, duration, isFlowMode, skipToNext]);
+    setMembershipMutate({ isPaid, tier });
+  }, [setMembershipMutate]);
 
   return {
     currentTrack,
@@ -187,12 +330,15 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     flowFilters,
     progress,
     duration,
+    isLoading,
+    isBuffering,
     savedTrackIds,
     membership,
     enterFlow,
     playTrack,
     togglePlayPause,
     skipToNext,
+    seekTo,
     exitFlow,
     setFlowFilters,
     toggleSaveTrack,
