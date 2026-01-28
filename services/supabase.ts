@@ -41,18 +41,24 @@ export interface SupabaseCollection {
 
 export async function fetchTracks(): Promise<SupabaseTrack[]> {
   console.log('[Supabase] Fetching tracks...');
-  const { data, error } = await supabase
-    .from('tracks')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('tracks')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error('[Supabase] Error fetching tracks:', error.message, error.code, error.details);
-    throw new Error(`Failed to fetch tracks: ${error.message}`);
+    if (error) {
+      console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to fetch tracks: ${error.message || error.code || 'Unknown error'}`);
+    }
+
+    console.log('[Supabase] Fetched tracks:', data?.length || 0);
+    return data || [];
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+    console.error('[Supabase] Exception fetching tracks:', errorMessage);
+    throw err;
   }
-
-  console.log('[Supabase] Fetched tracks:', data?.length || 0);
-  return data || [];
 }
 
 export async function fetchThemes(): Promise<SupabaseTheme[]> {
