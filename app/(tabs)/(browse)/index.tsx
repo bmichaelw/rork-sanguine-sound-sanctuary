@@ -24,13 +24,13 @@ type FilterType = 'all' | 'sleep' | 'trip' | 'voice' | 'noVoice';
 export default function BrowseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { playTrack, tracks, isLoading } = useAudio();
+  const { playTrack, allTracks, isLoadingTracks } = useAudio();
   
   const [selectedModality, setSelectedModality] = useState('All');
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
 
   const filteredTracks = useMemo(() => {
-    return tracks.filter(track => {
+    return allTracks.filter((track: Track) => {
       if (selectedModality !== 'All' && track.modality !== selectedModality) {
         return false;
       }
@@ -48,7 +48,7 @@ export default function BrowseScreen() {
           return true;
       }
     });
-  }, [tracks, selectedModality, selectedFilter]);
+  }, [allTracks, selectedModality, selectedFilter]);
 
   const handlePlayTrack = (track: Track) => {
     playTrack(track);
@@ -166,7 +166,7 @@ export default function BrowseScreen() {
             {filteredTracks.length} TRACK{filteredTracks.length !== 1 ? 'S' : ''}
           </Text>
           
-          {filteredTracks.map((track) => (
+          {filteredTracks.map((track: Track) => (
             <TouchableOpacity 
               key={track.id}
               style={styles.trackCard}
