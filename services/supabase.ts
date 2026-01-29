@@ -71,7 +71,6 @@ export interface SupabaseTrack {
   words: boolean;
   sleep_safe: boolean;
   trip_safe: boolean;
-  contains_dissonance: boolean;
   intensity?: SupabaseIntensity;
   modalities?: SupabaseModality[];
   intentions?: SupabaseIntention[];
@@ -197,7 +196,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
   try {
     const { data: tracksData, error: tracksError } = await supabase
       .from('tracks')
-      .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe, contains_dissonance');
+      .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe');
 
     if (tracksError) {
       console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksError, null, 2));
@@ -283,7 +282,6 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       words: track.words ?? false,
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
-      contains_dissonance: track.contains_dissonance ?? false,
       intensity: track.intensity_id ? intensitiesMap.get(track.intensity_id) : undefined,
       modalities: trackModalitiesMap.get(track.id) || [],
       intentions: trackIntentionsMap.get(track.id) || [],
@@ -322,7 +320,7 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
     
     const { data: tracksData, error: tracksError } = await supabase
       .from('tracks')
-      .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe, contains_dissonance')
+      .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe')
       .in('id', trackIds);
 
     if (tracksError) {
@@ -404,7 +402,6 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
       words: track.words ?? false,
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
-      contains_dissonance: track.contains_dissonance ?? false,
       intensity: track.intensity_id ? intensitiesMap.get(track.intensity_id) : undefined,
       modalities: trackModalitiesMap.get(track.id) || [],
       intentions: trackIntentionsMap.get(track.id) || [],
