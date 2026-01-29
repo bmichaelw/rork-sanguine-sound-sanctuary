@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  Platform,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -246,7 +247,7 @@ export default function AdminScreen() {
       <Modal
         visible={showUploadForm}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
         onRequestClose={() => setShowUploadForm(false)}
       >
         <UploadTrackForm
