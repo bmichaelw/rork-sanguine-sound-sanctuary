@@ -388,35 +388,26 @@ export async function uploadFileToStorage(
   }
 
   try {
-    console.log('[Supabase] Starting upload to storage...');
-    
-    const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
-    console.log('[Supabase] Upload URL:', uploadUrl);
-    
+    console.log('[Supabase] Starting upload via SDK...');
     const startTime = Date.now();
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${supabaseAnonKey}`,
-        'Content-Type': contentType,
-        'x-upsert': 'true',
-      },
-      body: file,
-    });
+    
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(path, file, {
+        contentType,
+        upsert: true,
+      });
     
     const elapsed = Date.now() - startTime;
-    console.log(`[Supabase] Upload fetch completed in ${elapsed}ms, status: ${response.status}`);
+    console.log(`[Supabase] Upload completed in ${elapsed}ms`);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Supabase] Upload error response:', errorText);
-      throw new Error(`Failed to upload file: ${response.status} - ${errorText}`);
+    if (error) {
+      console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to upload file: ${error.message}`);
     }
 
-    const result = await response.json();
-    console.log('[Supabase] Upload result:', JSON.stringify(result, null, 2));
+    console.log('[Supabase] Upload result:', JSON.stringify(data, null, 2));
 
-    console.log('[Supabase] Upload completed, getting public URL...');
     const { data: urlData } = supabase.storage
       .from(bucket)
       .getPublicUrl(path);
@@ -425,11 +416,14 @@ export async function uploadFileToStorage(
     return urlData.publicUrl;
   } catch (err: any) {
     console.error('[Supabase] Upload exception:', err?.message || err);
-    if (err?.message?.includes('storage/bucket-not-found') || err?.message?.includes('Bucket not found')) {
+    if (err?.message?.includes('bucket') && err?.message?.includes('not found')) {
       throw new Error(`Storage bucket '${bucket}' not found. Please contact support.`);
     }
-    if (err?.message?.includes('storage/unauthorized') || err?.message?.includes('not authorized')) {
+    if (err?.message?.includes('unauthorized') || err?.message?.includes('not authorized')) {
       throw new Error('Not authorized to upload files. Please check your permissions.');
+    }
+    if (err?.message?.includes('Payload too large')) {
+      throw new Error('File is too large. Please use a smaller file.');
     }
     throw err;
   }
