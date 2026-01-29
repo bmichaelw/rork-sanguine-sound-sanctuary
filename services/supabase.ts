@@ -194,25 +194,30 @@ export async function fetchIntensities(): Promise<SupabaseIntensity[]> {
 export async function fetchTracks(): Promise<SupabaseTrack[]> {
   console.log('[Supabase] Fetching tracks with nested selects...');
   try {
-    const { data, error } = await supabase
-      .from('tracks')
-      .select(`
-        *,
-        track_modalities(modality_id, modalities(id, name, description, image_url)),
-        track_intentions(intention_id, intentions(id, name, description)),
-        track_soundscapes(soundscape_id, soundscapes(id, name, description)),
-        track_chakras(chakra_id, chakras(id, name, description)),
-        intensities(id, name)
-      `);
+    const [tracksResult, intensitiesResult] = await Promise.all([
+      supabase
+        .from('tracks')
+        .select(`
+          *,
+          track_modalities(modality_id, modalities(id, name, description, image_url)),
+          track_intentions(intention_id, intentions(id, name, description)),
+          track_soundscapes(soundscape_id, soundscapes(id, name, description)),
+          track_chakras(chakra_id, chakras(id, name, description))
+        `),
+      supabase.from('intensities').select('id, name')
+    ]);
 
-    if (error) {
-      console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
-      throw new Error(`Failed to fetch tracks: ${error.message || error.code || 'Unknown error'}`);
+    if (tracksResult.error) {
+      console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksResult.error, null, 2));
+      throw new Error(`Failed to fetch tracks: ${tracksResult.error.message || tracksResult.error.code || 'Unknown error'}`);
     }
 
-    console.log('[Supabase] Raw nested data sample:', JSON.stringify(data?.[0], null, 2));
+    const intensitiesMap = new Map<string, SupabaseIntensity>();
+    (intensitiesResult.data || []).forEach((i: SupabaseIntensity) => intensitiesMap.set(i.id, i));
 
-    const transformedTracks: SupabaseTrack[] = (data || []).map((track: any) => ({
+    console.log('[Supabase] Raw nested data sample:', JSON.stringify(tracksResult.data?.[0], null, 2));
+
+    const transformedTracks: SupabaseTrack[] = (tracksResult.data || []).map((track: any) => ({
       id: track.id,
       title: track.title,
       duration: track.duration,
@@ -224,7 +229,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       words: track.words ?? false,
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
-      intensity: track.intensities || undefined,
+      intensity: track.intensity_id ? intensitiesMap.get(track.intensity_id) : undefined,
       modalities: (track.track_modalities || []).map((tm: any) => tm.modalities).filter(Boolean),
       intentions: (track.track_intentions || []).map((ti: any) => ti.intentions).filter(Boolean),
       soundscapes: (track.track_soundscapes || []).map((ts: any) => ts.soundscapes).filter(Boolean),
@@ -236,6 +241,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       const sample = transformedTracks[0];
       console.log('[Supabase] Sample track data:', {
         title: sample.title,
+        intensity: sample.intensity?.name,
         modalities: sample.modalities?.length || 0,
         intentions: sample.intentions?.length || 0,
         soundscapes: sample.soundscapes?.length || 0,
@@ -270,24 +276,29 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
 
     const trackIds = trackIdsData.map(t => t.track_id);
     
-    const { data, error } = await supabase
-      .from('tracks')
-      .select(`
-        *,
-        track_modalities(modality_id, modalities(id, name, description, image_url)),
-        track_intentions(intention_id, intentions(id, name, description)),
-        track_soundscapes(soundscape_id, soundscapes(id, name, description)),
-        track_chakras(chakra_id, chakras(id, name, description)),
-        intensities(id, name)
-      `)
-      .in('id', trackIds);
+    const [tracksResult, intensitiesResult] = await Promise.all([
+      supabase
+        .from('tracks')
+        .select(`
+          *,
+          track_modalities(modality_id, modalities(id, name, description, image_url)),
+          track_intentions(intention_id, intentions(id, name, description)),
+          track_soundscapes(soundscape_id, soundscapes(id, name, description)),
+          track_chakras(chakra_id, chakras(id, name, description))
+        `)
+        .in('id', trackIds),
+      supabase.from('intensities').select('id, name')
+    ]);
 
-    if (error) {
-      console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
-      throw new Error(`Failed to fetch tracks: ${error.message}`);
+    if (tracksResult.error) {
+      console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksResult.error, null, 2));
+      throw new Error(`Failed to fetch tracks: ${tracksResult.error.message}`);
     }
 
-    const transformedTracks: SupabaseTrack[] = (data || []).map((track: any) => ({
+    const intensitiesMap = new Map<string, SupabaseIntensity>();
+    (intensitiesResult.data || []).forEach((i: SupabaseIntensity) => intensitiesMap.set(i.id, i));
+
+    const transformedTracks: SupabaseTrack[] = (tracksResult.data || []).map((track: any) => ({
       id: track.id,
       title: track.title,
       duration: track.duration,
@@ -299,7 +310,7 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
       words: track.words ?? false,
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
-      intensity: track.intensities || undefined,
+      intensity: track.intensity_id ? intensitiesMap.get(track.intensity_id) : undefined,
       modalities: (track.track_modalities || []).map((tm: any) => tm.modalities).filter(Boolean),
       intentions: (track.track_intentions || []).map((ti: any) => ti.intentions).filter(Boolean),
       soundscapes: (track.track_soundscapes || []).map((ts: any) => ts.soundscapes).filter(Boolean),
