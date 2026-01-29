@@ -199,10 +199,10 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
         .from('tracks')
         .select(`
           *,
-          track_modalities(modality_id, modalities(id, name, description, image_url)),
-          track_intentions(intention_id, intentions(id, name, description)),
-          track_soundscapes(soundscape_id, soundscapes(id, name, description)),
-          track_chakras(chakra_id, chakras(id, name, description))
+          track_modalities(modality_id, modalities(id, name, image_url)),
+          track_intentions(intention_id, intentions(id, name)),
+          track_soundscapes(soundscape_id, soundscapes(id, name)),
+          track_chakras(chakra_id, chakras(id, name))
         `),
       supabase.from('intensities').select('id, name')
     ]);
@@ -281,10 +281,10 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
         .from('tracks')
         .select(`
           *,
-          track_modalities(modality_id, modalities(id, name, description, image_url)),
-          track_intentions(intention_id, intentions(id, name, description)),
-          track_soundscapes(soundscape_id, soundscapes(id, name, description)),
-          track_chakras(chakra_id, chakras(id, name, description))
+          track_modalities(modality_id, modalities(id, name, image_url)),
+          track_intentions(intention_id, intentions(id, name)),
+          track_soundscapes(soundscape_id, soundscapes(id, name)),
+          track_chakras(chakra_id, chakras(id, name))
         `)
         .in('id', trackIds),
       supabase.from('intensities').select('id, name')
