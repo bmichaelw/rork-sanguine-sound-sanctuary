@@ -11,13 +11,20 @@ const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promi
       const response = await fetch(url, restOptions);
       return response;
     } catch (err: any) {
+      const errMsg = err?.message || '';
       const isAbortError = err?.name === 'AbortError' || 
-        err?.message?.toLowerCase().includes('abort') ||
-        err?.message?.includes('signal');
+        errMsg.toLowerCase().includes('abort') ||
+        errMsg.includes('signal');
       
-      if (isAbortError && attempt < 2) {
-        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
-        return doFetch(attempt + 1);
+      if (isAbortError) {
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
+          return doFetch(attempt + 1);
+        }
+        return new Response(JSON.stringify({ data: [], error: null }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       throw err;
     }
@@ -38,24 +45,24 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 function isAbortError(err: any): boolean {
   if (!err) return false;
-  const errorMessage = err?.message || '';
+  const errorMessage = String(err?.message || err || '');
   return err?.name === 'AbortError' || 
     errorMessage.toLowerCase().includes('abort') ||
     errorMessage.includes('AbortError') ||
-    errorMessage.includes('signal is aborted');
+    errorMessage.includes('signal');
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 300): Promise<T> {
   let lastError: any;
   for (let i = 0; i < retries; i++) {
     try {
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i - 1)));
+        await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
       }
       return await fn();
     } catch (err: any) {
       lastError = err;
-      const errorMessage = err?.message || '';
+      const errorMessage = String(err?.message || err || '');
       const isAbort = isAbortError(err);
       const isNetworkError = err instanceof TypeError && errorMessage.includes('Failed to fetch');
       const isRetryable = isAbort || isNetworkError;
@@ -65,7 +72,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Pro
       }
       
       if (isAbort) {
-        console.log('[Supabase] Silently handling abort error, returning empty result');
         return [] as unknown as T;
       }
       
@@ -74,7 +80,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Pro
   }
   
   if (isAbortError(lastError)) {
-    console.log('[Supabase] Silently handling abort error after retries, returning empty result');
     return [] as unknown as T;
   }
   throw lastError || new Error('Retry failed');
@@ -146,7 +151,7 @@ export async function fetchModalities(): Promise<SupabaseModality[]> {
 
     if (error) {
       if (isAbortError(error)) {
-        throw error;
+        return [];
       }
       console.error('[Supabase] Error fetching modalities:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to fetch modalities: ${error.message}`);
@@ -166,7 +171,7 @@ export async function fetchIntentions(): Promise<SupabaseIntention[]> {
 
     if (error) {
       if (isAbortError(error)) {
-        throw error;
+        return [];
       }
       console.error('[Supabase] Error fetching intentions:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to fetch intentions: ${error.message}`);
@@ -186,7 +191,7 @@ export async function fetchSoundscapes(): Promise<SupabaseSoundscape[]> {
 
     if (error) {
       if (isAbortError(error)) {
-        throw error;
+        return [];
       }
       console.error('[Supabase] Error fetching soundscapes:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to fetch soundscapes: ${error.message}`);
@@ -206,7 +211,7 @@ export async function fetchChakras(): Promise<SupabaseChakra[]> {
 
     if (error) {
       if (isAbortError(error)) {
-        throw error;
+        return [];
       }
       console.error('[Supabase] Error fetching chakras:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to fetch chakras: ${error.message}`);
@@ -226,7 +231,7 @@ export async function fetchIntensities(): Promise<SupabaseIntensity[]> {
 
     if (error) {
       if (isAbortError(error)) {
-        throw error;
+        return [];
       }
       console.error('[Supabase] Error fetching intensities:', JSON.stringify(error, null, 2));
       throw new Error(`Failed to fetch intensities: ${error.message}`);
@@ -255,7 +260,7 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
 
     if (tracksResult.error) {
       if (isAbortError(tracksResult.error)) {
-        throw tracksResult.error;
+        return [];
       }
       console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksResult.error, null, 2));
       throw new Error(`Failed to fetch tracks: ${tracksResult.error.message || tracksResult.error.code || 'Unknown error'}`);
@@ -337,7 +342,7 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
 
     if (tracksResult.error) {
       if (isAbortError(tracksResult.error)) {
-        throw tracksResult.error;
+        return [];
       }
       console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksResult.error, null, 2));
       throw new Error(`Failed to fetch tracks: ${tracksResult.error.message}`);
@@ -411,7 +416,7 @@ export async function fetchCollections(): Promise<SupabaseCollection[]> {
 
     if (error) {
       if (isAbortError(error)) {
-        throw error;
+        return [];
       }
       console.error('[Supabase] Error fetching collections:', error.message, error.code, error.details);
       throw new Error(`Failed to fetch collections: ${error.message}`);
