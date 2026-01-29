@@ -23,6 +23,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Link,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import {
@@ -75,6 +76,9 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
   
   const [expandedSection, setExpandedSection] = useState<string | null>('modalities');
   const [showIntensityPicker, setShowIntensityPicker] = useState(false);
+  
+  const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
+  const [imageUrl, setImageUrl] = useState('');
 
   const { data: modalities = [] } = useQuery<SupabaseModality[]>({
     queryKey: ['modalities'],
@@ -105,28 +109,36 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
     mutationFn: async () => {
       if (!title.trim()) throw new Error('Title is required');
       if (!audioFile) throw new Error('Audio file is required');
-      if (!imageFile) throw new Error('Cover image is required');
+      if (imageInputMode === 'upload' && !imageFile) throw new Error('Cover image is required');
+      if (imageInputMode === 'url' && !imageUrl.trim()) throw new Error('Cover image URL is required');
       if (!duration || isNaN(parseInt(duration))) throw new Error('Valid duration is required');
 
       console.log('[Upload] Starting upload process...');
       
       const timestamp = Date.now();
       const audioPath = `tracks/${timestamp}_${audioFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-      const imagePath = `covers/${timestamp}_${imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
       console.log('[Upload] Fetching audio file...');
       const audioResponse = await fetch(audioFile.uri);
       const audioBlob = await audioResponse.blob();
-      
-      console.log('[Upload] Fetching image file...');
-      const imageResponse = await fetch(imageFile.uri);
-      const imageBlob = await imageResponse.blob();
 
       console.log('[Upload] Uploading audio to storage...');
       const audioUrl = await uploadFileToStorage('audio', audioPath, audioBlob, audioFile.mimeType);
       
-      console.log('[Upload] Uploading image to storage...');
-      const imageUrl = await uploadFileToStorage('images', imagePath, imageBlob, imageFile.mimeType);
+      let finalImageUrl: string;
+      
+      if (imageInputMode === 'url') {
+        console.log('[Upload] Using provided image URL...');
+        finalImageUrl = imageUrl.trim();
+      } else {
+        const imagePath = `covers/${timestamp}_${imageFile!.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        console.log('[Upload] Fetching image file...');
+        const imageResponse = await fetch(imageFile!.uri);
+        const imageBlob = await imageResponse.blob();
+        
+        console.log('[Upload] Uploading image to storage...');
+        finalImageUrl = await uploadFileToStorage('images', imagePath, imageBlob, imageFile!.mimeType);
+      }
 
       const trackData: UploadTrackData = {
         title: title.trim(),
@@ -145,7 +157,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       };
 
       console.log('[Upload] Creating track record...');
-      const track = await createTrack(trackData, audioUrl, imageUrl);
+      const track = await createTrack(trackData, audioUrl, finalImageUrl);
       console.log('[Upload] Track created successfully:', track.id);
       
       return track;
@@ -327,16 +339,59 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Cover Image *</Text>
-          <TouchableOpacity style={styles.filePicker} onPress={pickImageFile} activeOpacity={0.7}>
-            {imageFile ? (
-              <Image source={{ uri: imageFile.uri }} style={styles.imagePreview} />
-            ) : (
-              <ImageIcon color={Colors.dark.textMuted} size={24} />
-            )}
-            <Text style={[styles.filePickerText, imageFile && styles.filePickerTextSelected]}>
-              {imageFile ? imageFile.name : 'Select cover image (1:1 ratio)'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.imageInputToggle}>
+            <TouchableOpacity
+              style={[styles.toggleOption, imageInputMode === 'upload' && styles.toggleOptionActive]}
+              onPress={() => setImageInputMode('upload')}
+              activeOpacity={0.7}
+            >
+              <ImageIcon color={imageInputMode === 'upload' ? Colors.dark.text : Colors.dark.textMuted} size={16} />
+              <Text style={[styles.toggleOptionText, imageInputMode === 'upload' && styles.toggleOptionTextActive]}>
+                Upload
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleOption, imageInputMode === 'url' && styles.toggleOptionActive]}
+              onPress={() => setImageInputMode('url')}
+              activeOpacity={0.7}
+            >
+              <Link color={imageInputMode === 'url' ? Colors.dark.text : Colors.dark.textMuted} size={16} />
+              <Text style={[styles.toggleOptionText, imageInputMode === 'url' && styles.toggleOptionTextActive]}>
+                URL
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
+          {imageInputMode === 'upload' ? (
+            <TouchableOpacity style={styles.filePicker} onPress={pickImageFile} activeOpacity={0.7}>
+              {imageFile ? (
+                <Image source={{ uri: imageFile.uri }} style={styles.imagePreview} />
+              ) : (
+                <ImageIcon color={Colors.dark.textMuted} size={24} />
+              )}
+              <Text style={[styles.filePickerText, imageFile && styles.filePickerTextSelected]}>
+                {imageFile ? imageFile.name : 'Select cover image (1:1 ratio)'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View>
+              <TextInput
+                style={styles.textInput}
+                value={imageUrl}
+                onChangeText={setImageUrl}
+                placeholder="https://example.com/image.jpg"
+                placeholderTextColor={Colors.dark.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              {imageUrl.trim() !== '' && (
+                <View style={styles.urlPreviewContainer}>
+                  <Image source={{ uri: imageUrl }} style={styles.urlPreview} />
+                </View>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -512,6 +567,45 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 6,
+  },
+  imageInputToggle: {
+    flexDirection: 'row',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 8,
+    padding: 4,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  toggleOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  toggleOptionActive: {
+    backgroundColor: Colors.dark.primaryGlow,
+  },
+  toggleOptionText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+  },
+  toggleOptionTextActive: {
+    color: Colors.dark.text,
+    fontWeight: '500',
+  },
+  urlPreviewContainer: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  urlPreview: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: Colors.dark.surface,
   },
   dropdown: {
     flexDirection: 'row',
