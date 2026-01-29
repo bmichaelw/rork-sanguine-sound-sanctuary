@@ -342,22 +342,28 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
           <View style={styles.imageInputToggle}>
             <TouchableOpacity
               style={[styles.toggleOption, imageInputMode === 'upload' && styles.toggleOptionActive]}
-              onPress={() => setImageInputMode('upload')}
+              onPress={() => {
+                console.log('[Upload] Switching to upload mode');
+                setImageInputMode('upload');
+              }}
               activeOpacity={0.7}
             >
-              <ImageIcon color={imageInputMode === 'upload' ? Colors.dark.text : Colors.dark.textMuted} size={16} />
+              <ImageIcon color={imageInputMode === 'upload' ? Colors.dark.text : Colors.dark.textMuted} size={18} />
               <Text style={[styles.toggleOptionText, imageInputMode === 'upload' && styles.toggleOptionTextActive]}>
-                Upload
+                Upload File
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.toggleOption, imageInputMode === 'url' && styles.toggleOptionActive]}
-              onPress={() => setImageInputMode('url')}
+              onPress={() => {
+                console.log('[Upload] Switching to URL mode');
+                setImageInputMode('url');
+              }}
               activeOpacity={0.7}
             >
-              <Link color={imageInputMode === 'url' ? Colors.dark.text : Colors.dark.textMuted} size={16} />
+              <Link color={imageInputMode === 'url' ? Colors.dark.text : Colors.dark.textMuted} size={18} />
               <Text style={[styles.toggleOptionText, imageInputMode === 'url' && styles.toggleOptionTextActive]}>
-                URL
+                Use URL
               </Text>
             </TouchableOpacity>
           </View>
@@ -571,9 +577,9 @@ const styles = StyleSheet.create({
   imageInputToggle: {
     flexDirection: 'row',
     backgroundColor: Colors.dark.surface,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 4,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.dark.border,
   },
@@ -582,20 +588,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 6,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
   toggleOptionActive: {
-    backgroundColor: Colors.dark.primaryGlow,
+    backgroundColor: Colors.dark.primary,
   },
   toggleOptionText: {
     fontSize: 14,
+    fontWeight: '500',
     color: Colors.dark.textMuted,
   },
   toggleOptionTextActive: {
     color: Colors.dark.text,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   urlPreviewContainer: {
     marginTop: 10,
