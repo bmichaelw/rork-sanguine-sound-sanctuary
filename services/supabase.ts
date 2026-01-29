@@ -1,34 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const supabaseUrl = 'https://dnzrilaojufcvoshtdlw.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuenJpbGFvanVmY3Zvc2h0ZGx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MzM5NTYsImV4cCI6MjA4NTEwOTk1Nn0.YDlagGBg3x-aJLfWug29Mge6BAJo1enNNlvIqMv9-Dc';
-
-const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
-  const { signal, ...restOptions } = options || {};
-  
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
-  
-  try {
-    const response = await fetch(url, {
-      ...restOptions,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    throw err;
-  }
-};
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-  },
-  global: {
-    fetch: customFetch,
+    storage: AsyncStorage,
+    storageKey: 'supabase-auth',
+    flowType: 'pkce',
+    detectSessionInUrl: Platform.OS === 'web',
   },
 });
 
