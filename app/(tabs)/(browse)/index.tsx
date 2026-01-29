@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Play, Clock, Mic, MicOff, ChevronDown, ChevronUp, Check } from 'lucide-react-native';
+import { Play, Clock, Mic, MicOff, ChevronDown, ChevronUp, Check, LayoutGrid, List } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
@@ -46,6 +46,7 @@ export default function BrowseScreen() {
   const [voiceFilter, setVoiceFilter] = useState<'all' | 'voice' | 'noVoice'>('all');
 
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
 
   const toggleSection = (section: string) => {
     setExpandedSection(prev => prev === section ? null : section);
@@ -278,57 +279,91 @@ export default function BrowseScreen() {
             </View>
 
             <View style={styles.tracksSection}>
-              <Text style={styles.sectionLabel}>
-                {filteredTracks.length} TRACK{filteredTracks.length !== 1 ? 'S' : ''}
-              </Text>
+              <View style={styles.tracksSectionHeader}>
+                <Text style={styles.sectionLabelInline}>
+                  {filteredTracks.length} TRACK{filteredTracks.length !== 1 ? 'S' : ''}
+                </Text>
+                <View style={styles.viewToggle}>
+                  <TouchableOpacity
+                    style={[styles.viewToggleButton, viewMode === 'card' && styles.viewToggleButtonActive]}
+                    onPress={() => setViewMode('card')}
+                  >
+                    <LayoutGrid size={16} color={viewMode === 'card' ? Colors.dark.primary : Colors.dark.textMuted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.viewToggleButton, viewMode === 'list' && styles.viewToggleButtonActive]}
+                    onPress={() => setViewMode('list')}
+                  >
+                    <List size={16} color={viewMode === 'list' ? Colors.dark.primary : Colors.dark.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              </View>
               
-              {filteredTracks.map((track: Track) => (
-                <TouchableOpacity 
-                  key={track.id}
-                  style={styles.trackCard}
-                  onPress={() => handlePlayTrack(track)}
-                  activeOpacity={0.7}
-                >
-                  <Image source={{ uri: track.imageUrl }} style={styles.trackImage} />
-                  
-                  <View style={styles.trackContent}>
-                    <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
-                    <Text style={styles.trackModality} numberOfLines={1}>
-                      {track.modalities.map(m => m.name).join(', ') || 'No modality'}
-                    </Text>
-                    
-                    <View style={styles.trackMeta}>
-                      <View style={styles.trackDuration}>
-                        <Clock size={12} color={Colors.dark.textMuted} />
-                        <Text style={styles.trackDurationText}>{formatDuration(track.duration)}</Text>
+              {viewMode === 'card' ? (
+                <View style={styles.cardGrid}>
+                  {filteredTracks.map((track: Track) => (
+                    <TouchableOpacity 
+                      key={track.id}
+                      style={styles.cardItem}
+                      onPress={() => handlePlayTrack(track)}
+                      activeOpacity={0.8}
+                    >
+                      <Image source={{ uri: track.imageUrl }} style={styles.cardImage} />
+                      <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.8)']}
+                        style={styles.cardGradient}
+                      />
+                      <View style={styles.cardContent}>
+                        <Text style={styles.cardTitle} numberOfLines={2}>{track.title}</Text>
                       </View>
-                      
-                      <View style={styles.trackTags}>
-                        {track.sleepSafe && (
-                          <View style={styles.trackTag}>
-                            <Text style={styles.trackTagText}>Sleep</Text>
+                      <TouchableOpacity 
+                        style={styles.cardPlayButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          playTrack(track);
+                        }}
+                      >
+                        <Play size={16} color={Colors.dark.text} fill={Colors.dark.text} />
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                filteredTracks.map((track: Track) => (
+                <TouchableOpacity 
+                    key={track.id}
+                    style={styles.listItem}
+                    onPress={() => handlePlayTrack(track)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.listContent}>
+                      <Text style={styles.listTitle} numberOfLines={1}>{track.title}</Text>
+                      <View style={styles.listPills}>
+                        {track.modalities.slice(0, 1).map(m => (
+                          <View key={m.id} style={styles.listPill}>
+                            <Text style={styles.listPillText}>{m.name}</Text>
                           </View>
-                        )}
-                        {track.tripSafe && (
-                          <View style={styles.trackTag}>
-                            <Text style={styles.trackTagText}>Journey</Text>
+                        ))}
+                        {track.intensity && (
+                          <View style={[styles.listPill, styles.listPillIntensity]}>
+                            <Text style={styles.listPillText}>{track.intensity.name}</Text>
                           </View>
                         )}
                       </View>
                     </View>
-                  </View>
-                  
-                  <TouchableOpacity 
-                    style={styles.trackPlayButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      playTrack(track);
-                    }}
-                  >
-                    <Play size={18} color={Colors.dark.primary} fill={Colors.dark.primary} />
+                    
+                    <TouchableOpacity 
+                      style={styles.listPlayButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        playTrack(track);
+                      }}
+                    >
+                      <Play size={16} color={Colors.dark.primary} fill={Colors.dark.primary} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                </TouchableOpacity>
-              ))}
+                ))
+              )}
 
               {filteredTracks.length === 0 && (
                 <View style={styles.emptyState}>
@@ -519,73 +554,119 @@ const styles = StyleSheet.create({
   tracksSection: {
     paddingHorizontal: 20,
   },
-  trackCard: {
+  tracksSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
+    justifyContent: 'space-between',
     marginBottom: 12,
-    padding: 12,
+  },
+  sectionLabelInline: {
+    ...typography.caption,
+    color: Colors.dark.textMuted,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 8,
+    padding: 2,
     borderWidth: 1,
     borderColor: Colors.dark.borderSubtle,
   },
-  trackImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    backgroundColor: Colors.dark.surfaceElevated,
-  },
-  trackContent: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  trackTitle: {
-    ...typography.subtitle,
-    color: Colors.dark.text,
-    fontSize: 15,
-  },
-  trackModality: {
-    ...typography.bodySmall,
-    color: Colors.dark.textMuted,
-    marginTop: 2,
-  },
-  trackMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 12,
-  },
-  trackDuration: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  trackDurationText: {
-    ...typography.caption,
-    color: Colors.dark.textMuted,
-    fontSize: 10,
-  },
-  trackTags: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  trackTag: {
-    backgroundColor: Colors.dark.surfaceElevated,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+  viewToggleButton: {
+    padding: 6,
     borderRadius: 6,
   },
-  trackTagText: {
-    ...typography.caption,
-    color: Colors.dark.textMuted,
-    fontSize: 9,
+  viewToggleButtonActive: {
+    backgroundColor: Colors.dark.surfaceElevated,
   },
-  trackPlayButton: {
-    width: 40,
-    height: 40,
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  cardItem: {
+    width: (width - 52) / 2,
+    height: (width - 52) / 2,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: Colors.dark.surface,
+  },
+  cardImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  cardGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cardContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 12,
+  },
+  cardTitle: {
+    ...typography.subtitle,
+    color: Colors.dark.text,
+    fontSize: 14,
+  },
+  cardPlayButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.borderSubtle,
+  },
+  listContent: {
+    flex: 1,
+  },
+  listTitle: {
+    ...typography.subtitle,
+    color: Colors.dark.text,
+    fontSize: 15,
+    marginBottom: 6,
+  },
+  listPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  listPill: {
+    backgroundColor: Colors.dark.surface,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.borderSubtle,
+  },
+  listPillIntensity: {
+    backgroundColor: Colors.dark.primaryGlow,
+    borderColor: Colors.dark.primary,
+  },
+  listPillText: {
+    ...typography.caption,
+    color: Colors.dark.textSecondary,
+    fontSize: 11,
+  },
+  listPlayButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  
   emptyState: {
     paddingVertical: 40,
     alignItems: 'center',
