@@ -198,6 +198,9 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       .from('tracks')
       .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe');
 
+    console.log('[Supabase] Raw tracksData response:', JSON.stringify(tracksData, null, 2));
+    console.log('[Supabase] tracksError:', tracksError);
+
     if (tracksError) {
       console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksError, null, 2));
       throw new Error(`Failed to fetch tracks: ${tracksError.message || tracksError.code || 'Unknown error'}`);
