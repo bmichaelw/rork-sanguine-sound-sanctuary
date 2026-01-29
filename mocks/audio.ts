@@ -41,7 +41,6 @@ export interface Track {
   words: boolean;
   sleepSafe: boolean;
   tripSafe: boolean;
-  containsDissonance: boolean;
   modalities: Modality[];
   intentions: Intention[];
   soundscapes: Soundscape[];

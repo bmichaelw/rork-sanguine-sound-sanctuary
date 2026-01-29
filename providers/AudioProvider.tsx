@@ -73,7 +73,6 @@ function transformTrack(track: SupabaseTrack): Track {
     words: track.words,
     sleepSafe: track.sleep_safe,
     tripSafe: track.trip_safe,
-    containsDissonance: track.contains_dissonance,
     modalities: (track.modalities || []).map(transformModality),
     intentions: (track.intentions || []).map(transformIntention),
     soundscapes: (track.soundscapes || []).map(transformSoundscape),
