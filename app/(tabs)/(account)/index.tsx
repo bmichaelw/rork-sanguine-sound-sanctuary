@@ -22,6 +22,8 @@ import {
   LogIn,
   LogOut,
   User,
+  Upload,
+  TestTube,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
@@ -126,6 +128,36 @@ export default function AccountScreen() {
             </View>
             <ChevronRight color={Colors.dark.textMuted} size={20} />
           </TouchableOpacity>
+        )}
+
+        {isAdmin && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>ADMIN</Text>
+            
+            <TouchableOpacity 
+              style={styles.linkRow} 
+              activeOpacity={0.7}
+              onPress={() => router.push('/(tabs)/(upload)')}
+            >
+              <View style={styles.settingIcon}>
+                <Upload color={Colors.dark.primary} size={20} />
+              </View>
+              <Text style={styles.linkTitle}>Upload Track</Text>
+              <ChevronRight color={Colors.dark.textMuted} size={20} />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.linkRow} 
+              activeOpacity={0.7}
+              onPress={() => router.push('/test-upload')}
+            >
+              <View style={styles.settingIcon}>
+                <TestTube color={Colors.dark.warning} size={20} />
+              </View>
+              <Text style={styles.linkTitle}>Test Upload</Text>
+              <ChevronRight color={Colors.dark.textMuted} size={20} />
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={styles.membershipCard}>
