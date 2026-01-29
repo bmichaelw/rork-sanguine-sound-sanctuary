@@ -390,19 +390,31 @@ export async function uploadFileToStorage(
   try {
     console.log('[Supabase] Starting upload to storage...');
     
-    const result = await supabase.storage
-      .from(bucket)
-      .upload(path, file, {
-        contentType,
-        upsert: true,
-      });
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/${bucket}/${path}`;
+    console.log('[Supabase] Upload URL:', uploadUrl);
+    
+    const startTime = Date.now();
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'Content-Type': contentType,
+        'x-upsert': 'true',
+      },
+      body: file,
+    });
+    
+    const elapsed = Date.now() - startTime;
+    console.log(`[Supabase] Upload fetch completed in ${elapsed}ms, status: ${response.status}`);
 
-    console.log('[Supabase] Upload result:', JSON.stringify(result, null, 2));
-
-    if (result.error) {
-      console.error('[Supabase] Upload error:', JSON.stringify(result.error, null, 2));
-      throw new Error(`Failed to upload file: ${result.error.message}`);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Supabase] Upload error response:', errorText);
+      throw new Error(`Failed to upload file: ${response.status} - ${errorText}`);
     }
+
+    const result = await response.json();
+    console.log('[Supabase] Upload result:', JSON.stringify(result, null, 2));
 
     console.log('[Supabase] Upload completed, getting public URL...');
     const { data: urlData } = supabase.storage
