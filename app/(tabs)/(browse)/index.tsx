@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -12,13 +12,101 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Play, Clock, Mic, MicOff, ChevronDown, ChevronUp, Check, LayoutGrid, List } from 'lucide-react-native';
+import { Play, Clock, Mic, MicOff, ChevronDown, ChevronUp, Check, LayoutGrid, List, MoreHorizontal } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
 import { formatDuration, Track } from '@/mocks/audio';
 
 const { width } = Dimensions.get('window');
+
+interface TrackListItemProps {
+  track: Track;
+  onPlay: (track: Track) => void;
+  onPlayDirect: (track: Track) => void;
+}
+
+function TrackListItem({ track, onPlay, onPlayDirect }: TrackListItemProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  const firstModality = track.modalities[0];
+  const remainingModalities = track.modalities.slice(1);
+  const hasMoreTags = 
+    remainingModalities.length > 0 || 
+    track.intentions.length > 0 || 
+    track.soundscapes.length > 0 || 
+    track.chakras.length > 0;
+
+  return (
+    <TouchableOpacity 
+      style={styles.listItem}
+      onPress={() => onPlay(track)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.listContent}>
+        <Text style={styles.listTitle} numberOfLines={1}>{track.title}</Text>
+        <View style={styles.listPills}>
+          {firstModality && (
+            <View style={[styles.listPill, styles.listPillModality]}>
+              <Text style={styles.listPillText}>{firstModality.name}</Text>
+            </View>
+          )}
+          {track.intensity && (
+            <View style={[styles.listPill, styles.listPillIntensity]}>
+              <Text style={styles.listPillText}>{track.intensity.name}</Text>
+            </View>
+          )}
+          {hasMoreTags && (
+            <TouchableOpacity
+              style={[styles.listPill, styles.expandPill]}
+              onPress={(e) => {
+                e.stopPropagation();
+                setExpanded(!expanded);
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MoreHorizontal size={12} color={Colors.dark.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+        {expanded && (
+          <View style={styles.expandedPills}>
+            {remainingModalities.map(m => (
+              <View key={`mod-${m.id}`} style={[styles.listPill, styles.listPillModality]}>
+                <Text style={styles.listPillText}>{m.name}</Text>
+              </View>
+            ))}
+            {track.intentions.map(i => (
+              <View key={`int-${i.id}`} style={[styles.listPill, styles.listPillIntention]}>
+                <Text style={styles.listPillText}>{i.name}</Text>
+              </View>
+            ))}
+            {track.soundscapes.map(s => (
+              <View key={`snd-${s.id}`} style={[styles.listPill, styles.listPillSoundscape]}>
+                <Text style={styles.listPillText}>{s.name}</Text>
+              </View>
+            ))}
+            {track.chakras.map(c => (
+              <View key={`chk-${c.id}`} style={[styles.listPill, styles.listPillChakra]}>
+                <Text style={styles.listPillText}>{c.name}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+      
+      <TouchableOpacity 
+        style={styles.listPlayButton}
+        onPress={(e) => {
+          e.stopPropagation();
+          onPlayDirect(track);
+        }}
+      >
+        <Play size={16} color={Colors.dark.primary} fill={Colors.dark.primary} />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
 
 export default function BrowseScreen() {
   const router = useRouter();
@@ -340,53 +428,12 @@ export default function BrowseScreen() {
                 </View>
               ) : (
                 filteredTracks.map((track: Track) => (
-                <TouchableOpacity 
-                    key={track.id}
-                    style={styles.listItem}
-                    onPress={() => handlePlayTrack(track)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.listContent}>
-                      <Text style={styles.listTitle} numberOfLines={1}>{track.title}</Text>
-                      <View style={styles.listPills}>
-                        {track.modalities.map(m => (
-                          <View key={`mod-${m.id}`} style={[styles.listPill, styles.listPillModality]}>
-                            <Text style={styles.listPillText}>{m.name}</Text>
-                          </View>
-                        ))}
-                        {track.intentions.map(i => (
-                          <View key={`int-${i.id}`} style={[styles.listPill, styles.listPillIntention]}>
-                            <Text style={styles.listPillText}>{i.name}</Text>
-                          </View>
-                        ))}
-                        {track.soundscapes.map(s => (
-                          <View key={`snd-${s.id}`} style={[styles.listPill, styles.listPillSoundscape]}>
-                            <Text style={styles.listPillText}>{s.name}</Text>
-                          </View>
-                        ))}
-                        {track.chakras.map(c => (
-                          <View key={`chk-${c.id}`} style={[styles.listPill, styles.listPillChakra]}>
-                            <Text style={styles.listPillText}>{c.name}</Text>
-                          </View>
-                        ))}
-                        {track.intensity && (
-                          <View style={[styles.listPill, styles.listPillIntensity]}>
-                            <Text style={styles.listPillText}>{track.intensity.name}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                    
-                    <TouchableOpacity 
-                      style={styles.listPlayButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        playTrack(track);
-                      }}
-                    >
-                      <Play size={16} color={Colors.dark.primary} fill={Colors.dark.primary} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+                  <TrackListItem 
+                    key={track.id} 
+                    track={track} 
+                    onPlay={handlePlayTrack}
+                    onPlayDirect={playTrack}
+                  />
                 ))
               )}
 
@@ -700,6 +747,17 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: Colors.dark.textSecondary,
     fontSize: 11,
+  },
+  expandPill: {
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderColor: Colors.dark.borderSubtle,
+    paddingHorizontal: 8,
+  },
+  expandedPills: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 6,
   },
   listPlayButton: {
     width: 36,
