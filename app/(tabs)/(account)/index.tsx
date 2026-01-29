@@ -19,15 +19,22 @@ import {
   Mail,
   ChevronRight,
   Sparkles,
+  LogIn,
+  LogOut,
+  User,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { membership, setMembership } = useAudio();
+  const { user, isAuthenticated, isAdmin, signOut, isLoading } = useAuth();
   const [sleepTimer, setSleepTimer] = React.useState(false);
   const [notifications, setNotifications] = React.useState(true);
 
@@ -45,6 +52,24 @@ export default function AccountScreen() {
     setter(value);
   };
 
+  const handleSignOut = async () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    try {
+      await signOut();
+    } catch (err) {
+      console.error('[Account] Sign out error:', err);
+    }
+  };
+
+  const handleLogin = () => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    router.push('/login');
+  };
+
   return (
     <View style={styles.container}>
       <LinearGradient
@@ -60,6 +85,48 @@ export default function AccountScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>Account</Text>
+
+        {isAuthenticated ? (
+          <View style={styles.userCard}>
+            <View style={styles.userAvatar}>
+              <User color={Colors.dark.primary} size={28} />
+            </View>
+            <View style={styles.userInfo}>
+              <Text style={styles.userEmail}>{user?.email}</Text>
+              {isAdmin && (
+                <View style={styles.adminBadge}>
+                  <Shield color={Colors.dark.success} size={12} />
+                  <Text style={styles.adminBadgeText}>Admin</Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+              disabled={isLoading}
+              activeOpacity={0.7}
+            >
+              <LogOut color={Colors.dark.error} size={20} />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.loginCard}
+            onPress={handleLogin}
+            activeOpacity={0.8}
+          >
+            <View style={styles.loginIcon}>
+              <LogIn color={Colors.dark.primary} size={24} />
+            </View>
+            <View style={styles.loginContent}>
+              <Text style={styles.loginTitle}>Sign In</Text>
+              <Text style={styles.loginDescription}>
+                Sign in to sync your data and access admin features
+              </Text>
+            </View>
+            <ChevronRight color={Colors.dark.textMuted} size={20} />
+          </TouchableOpacity>
+        )}
 
         <View style={styles.membershipCard}>
           <LinearGradient
@@ -356,5 +423,90 @@ const styles = StyleSheet.create({
     marginTop: 8,
     opacity: 0.3,
     fontSize: 9,
+  },
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  userAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.dark.primaryGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userInfo: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  userEmail: {
+    ...typography.subtitle,
+    color: Colors.dark.text,
+    fontSize: 15,
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(126, 200, 139, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  adminBadgeText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+    color: Colors.dark.success,
+  },
+  signOutButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(200, 126, 126, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  loginIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.dark.primaryGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loginContent: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  loginTitle: {
+    ...typography.subtitle,
+    color: Colors.dark.text,
+    fontSize: 16,
+  },
+  loginDescription: {
+    ...typography.bodySmall,
+    color: Colors.dark.textMuted,
+    marginTop: 4,
   },
 });

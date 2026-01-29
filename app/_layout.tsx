@@ -5,6 +5,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { AudioProvider } from "@/providers/AudioProvider";
+import { AuthProvider } from "@/providers/AuthProvider";
 import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
@@ -15,6 +16,13 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerBackTitle: "Back" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen 
+        name="login" 
+        options={{ 
+          headerShown: false,
+          presentation: 'modal',
+        }} 
+      />
       <Stack.Screen 
         name="player" 
         options={{ 
@@ -34,12 +42,14 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AudioProvider>
-        <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.dark.background }}>
-          <StatusBar style="light" />
-          <RootLayoutNav />
-        </GestureHandlerRootView>
-      </AudioProvider>
+      <AuthProvider>
+        <AudioProvider>
+          <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.dark.background }}>
+            <StatusBar style="light" />
+            <RootLayoutNav />
+          </GestureHandlerRootView>
+        </AudioProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

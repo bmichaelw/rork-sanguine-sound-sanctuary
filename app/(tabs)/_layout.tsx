@@ -1,13 +1,15 @@
 import { Tabs } from "expo-router";
-import { Disc3, Compass, Heart, User } from "lucide-react-native";
+import { Disc3, Compass, Heart, User, Upload } from "lucide-react-native";
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Colors from "@/constants/colors";
 import { useAudio } from "@/providers/AudioProvider";
+import { useAuth } from "@/providers/AuthProvider";
 import MiniPlayer from "@/components/MiniPlayer";
 
 export default function TabLayout() {
   const { currentTrack } = useAudio();
+  const { isAdmin } = useAuth();
 
   return (
     <View style={styles.container}>
@@ -58,6 +60,14 @@ export default function TabLayout() {
           options={{
             title: "Account",
             tabBarIcon: ({ color, size }) => <User color={color} size={size - 2} strokeWidth={1.5} />,
+          }}
+        />
+        <Tabs.Screen
+          name="(upload)"
+          options={{
+            title: "Upload",
+            tabBarIcon: ({ color, size }) => <Upload color={color} size={size - 2} strokeWidth={1.5} />,
+            href: isAdmin ? "/(tabs)/(upload)" : null,
           }}
         />
       </Tabs>
