@@ -326,6 +326,42 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
   }
 }
 
+export interface LibraryStats {
+  totalTracks: number;
+  tracksPerModality: { name: string; count: number }[];
+}
+
+export async function fetchLibraryStats(): Promise<LibraryStats> {
+  console.log('[Supabase] Fetching library stats...');
+  try {
+    const [tracksResult, modalitiesResult, trackModalitiesResult] = await Promise.all([
+      supabase.from('tracks').select('id', { count: 'exact', head: true }),
+      supabase.from('modalities').select('id, name'),
+      supabase.from('track_modalities').select('modality_id'),
+    ]);
+
+    const totalTracks = tracksResult.count || 0;
+    
+    const modalityCountMap = new Map<string, number>();
+    (trackModalitiesResult.data || []).forEach((tm: any) => {
+      const current = modalityCountMap.get(tm.modality_id) || 0;
+      modalityCountMap.set(tm.modality_id, current + 1);
+    });
+
+    const tracksPerModality = (modalitiesResult.data || []).map((m: any) => ({
+      name: m.name,
+      count: modalityCountMap.get(m.id) || 0,
+    })).sort((a, b) => b.count - a.count);
+
+    console.log('[Supabase] Library stats:', { totalTracks, modalitiesCount: tracksPerModality.length });
+    return { totalTracks, tracksPerModality };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
+    console.error('[Supabase] Exception fetching library stats:', errorMessage);
+    throw err;
+  }
+}
+
 export async function fetchCollections(): Promise<SupabaseCollection[]> {
   console.log('[Supabase] Fetching collections...');
   const { data, error } = await supabase

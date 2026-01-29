@@ -1,17 +1,37 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import { Upload, Music, Shield } from 'lucide-react-native';
+import { useQuery } from '@tanstack/react-query';
+import { 
+  Upload, 
+  Music, 
+  Shield, 
+  BarChart3, 
+  TrendingUp, 
+  Database,
+  ChevronRight,
+  Clock,
+} from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/providers/AuthProvider';
+import { fetchLibraryStats, LibraryStats } from '@/services/supabase';
 
-export default function UploadScreen() {
+export default function AdminScreen() {
   const { user, isAdmin } = useAuth();
+  const [expandedSection, setExpandedSection] = useState<string | null>('stats');
+
+  const { data: stats, isLoading, refetch, isRefetching } = useQuery<LibraryStats>({
+    queryKey: ['libraryStats'],
+    queryFn: fetchLibraryStats,
+    enabled: isAdmin,
+  });
 
   if (!isAdmin) {
     return (
@@ -27,58 +47,194 @@ export default function UploadScreen() {
     );
   }
 
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={refetch}
+          tintColor={Colors.dark.primary}
+        />
+      }
+    >
       <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Upload color={Colors.dark.primary} size={32} strokeWidth={1.5} />
+        <View style={styles.adminBadgeHeader}>
+          <Shield color={Colors.dark.success} size={16} />
+          <Text style={styles.adminBadgeHeaderText}>Admin</Text>
         </View>
-        <Text style={styles.title}>Admin Upload</Text>
-        <Text style={styles.subtitle}>
-          Upload new tracks and manage content
-        </Text>
+        <Text style={styles.welcomeText}>Welcome back,</Text>
+        <Text style={styles.emailText}>{user?.email}</Text>
       </View>
 
-      <View style={styles.userInfo}>
-        <Text style={styles.userInfoLabel}>Logged in as</Text>
-        <Text style={styles.userInfoEmail}>{user?.email}</Text>
-        <View style={styles.adminBadge}>
-          <Shield color={Colors.dark.success} size={14} />
-          <Text style={styles.adminBadgeText}>Admin</Text>
+      {/* Upload Track Section */}
+      <TouchableOpacity
+        style={styles.sectionHeader}
+        onPress={() => toggleSection('upload')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <View style={[styles.sectionIcon, { backgroundColor: 'rgba(99, 179, 237, 0.15)' }]}>
+            <Upload color="#63B3ED" size={20} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.sectionTitle}>Upload Track</Text>
         </View>
-      </View>
+        <ChevronRight 
+          color={Colors.dark.textMuted} 
+          size={20} 
+          style={{ transform: [{ rotate: expandedSection === 'upload' ? '90deg' : '0deg' }] }}
+        />
+      </TouchableOpacity>
 
-      <View style={styles.uploadSection}>
-        <TouchableOpacity style={styles.uploadButton} activeOpacity={0.8}>
-          <Music color={Colors.dark.text} size={24} strokeWidth={1.5} />
-          <Text style={styles.uploadButtonText}>Upload Track</Text>
-          <Text style={styles.uploadButtonSubtext}>
-            Add a new meditation track
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {expandedSection === 'upload' && (
+        <View style={styles.sectionContent}>
+          <TouchableOpacity style={styles.uploadButton} activeOpacity={0.8}>
+            <Music color={Colors.dark.text} size={28} strokeWidth={1.5} />
+            <Text style={styles.uploadButtonText}>Upload New Track</Text>
+            <Text style={styles.uploadButtonSubtext}>
+              Add a new meditation track to the library
+            </Text>
+          </TouchableOpacity>
 
-      <View style={styles.infoSection}>
-        <Text style={styles.infoTitle}>Upload Guidelines</Text>
-        <View style={styles.infoItem}>
-          <Text style={styles.infoBullet}>•</Text>
-          <Text style={styles.infoText}>
-            Audio files should be in MP3 or M4A format
-          </Text>
+          <View style={styles.guidelinesCard}>
+            <Text style={styles.guidelinesTitle}>Upload Guidelines</Text>
+            <View style={styles.guidelineItem}>
+              <View style={styles.guidelineDot} />
+              <Text style={styles.guidelineText}>Audio: MP3 or M4A format</Text>
+            </View>
+            <View style={styles.guidelineItem}>
+              <View style={styles.guidelineDot} />
+              <Text style={styles.guidelineText}>Cover art: 1:1 ratio, min 500x500px</Text>
+            </View>
+            <View style={styles.guidelineItem}>
+              <View style={styles.guidelineDot} />
+              <Text style={styles.guidelineText}>Add modalities, intentions & soundscapes</Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.infoItem}>
-          <Text style={styles.infoBullet}>•</Text>
-          <Text style={styles.infoText}>
-            Include cover art (1:1 aspect ratio, minimum 500x500px)
-          </Text>
+      )}
+
+      {/* Library Stats Section */}
+      <TouchableOpacity
+        style={styles.sectionHeader}
+        onPress={() => toggleSection('stats')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <View style={[styles.sectionIcon, { backgroundColor: 'rgba(126, 200, 139, 0.15)' }]}>
+            <Database color={Colors.dark.success} size={20} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.sectionTitle}>Library Stats</Text>
         </View>
-        <View style={styles.infoItem}>
-          <Text style={styles.infoBullet}>•</Text>
-          <Text style={styles.infoText}>
-            Add appropriate tags for modalities, intentions, and soundscapes
-          </Text>
+        <ChevronRight 
+          color={Colors.dark.textMuted} 
+          size={20} 
+          style={{ transform: [{ rotate: expandedSection === 'stats' ? '90deg' : '0deg' }] }}
+        />
+      </TouchableOpacity>
+
+      {expandedSection === 'stats' && (
+        <View style={styles.sectionContent}>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator color={Colors.dark.primary} size="small" />
+              <Text style={styles.loadingText}>Loading stats...</Text>
+            </View>
+          ) : stats ? (
+            <>
+              <View style={styles.totalTracksCard}>
+                <View style={styles.totalTracksIconContainer}>
+                  <Music color={Colors.dark.primary} size={24} strokeWidth={1.5} />
+                </View>
+                <View style={styles.totalTracksInfo}>
+                  <Text style={styles.totalTracksLabel}>Total Tracks</Text>
+                  <Text style={styles.totalTracksValue}>{stats.totalTracks}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.modalityStatsTitle}>Tracks by Modality</Text>
+              <View style={styles.modalityList}>
+                {stats.tracksPerModality.map((modality, index) => (
+                  <View key={modality.name} style={styles.modalityItem}>
+                    <View style={styles.modalityRank}>
+                      <Text style={styles.modalityRankText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.modalityName}>{modality.name}</Text>
+                    <View style={styles.modalityCountBadge}>
+                      <Text style={styles.modalityCount}>{modality.count}</Text>
+                    </View>
+                  </View>
+                ))}
+                {stats.tracksPerModality.length === 0 && (
+                  <Text style={styles.emptyText}>No modalities found</Text>
+                )}
+              </View>
+            </>
+          ) : (
+            <Text style={styles.errorText}>Failed to load stats</Text>
+          )}
         </View>
-      </View>
+      )}
+
+      {/* Analytics Section */}
+      <TouchableOpacity
+        style={styles.sectionHeader}
+        onPress={() => toggleSection('analytics')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sectionHeaderLeft}>
+          <View style={[styles.sectionIcon, { backgroundColor: 'rgba(237, 137, 54, 0.15)' }]}>
+            <BarChart3 color="#ED8936" size={20} strokeWidth={1.5} />
+          </View>
+          <Text style={styles.sectionTitle}>Analytics</Text>
+        </View>
+        <ChevronRight 
+          color={Colors.dark.textMuted} 
+          size={20} 
+          style={{ transform: [{ rotate: expandedSection === 'analytics' ? '90deg' : '0deg' }] }}
+        />
+      </TouchableOpacity>
+
+      {expandedSection === 'analytics' && (
+        <View style={styles.sectionContent}>
+          <View style={styles.comingSoonCard}>
+            <View style={styles.comingSoonIconContainer}>
+              <TrendingUp color={Colors.dark.textMuted} size={32} strokeWidth={1.5} />
+            </View>
+            <Text style={styles.comingSoonTitle}>Coming Soon</Text>
+            <Text style={styles.comingSoonText}>
+              Analytics dashboard with play counts, user engagement metrics, and listening trends will be available in a future update.
+            </Text>
+            
+            <View style={styles.plannedFeatures}>
+              <Text style={styles.plannedFeaturesTitle}>Planned Features</Text>
+              <View style={styles.plannedFeatureItem}>
+                <Clock color={Colors.dark.textMuted} size={14} />
+                <Text style={styles.plannedFeatureText}>Total play counts per track</Text>
+              </View>
+              <View style={styles.plannedFeatureItem}>
+                <Clock color={Colors.dark.textMuted} size={14} />
+                <Text style={styles.plannedFeatureText}>User engagement metrics</Text>
+              </View>
+              <View style={styles.plannedFeatureItem}>
+                <Clock color={Colors.dark.textMuted} size={14} />
+                <Text style={styles.plannedFeatureText}>Popular listening times</Text>
+              </View>
+              <View style={styles.plannedFeatureItem}>
+                <Clock color={Colors.dark.textMuted} size={14} />
+                <Text style={styles.plannedFeatureText}>Completion rates by track</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
+      <View style={styles.footer} />
     </ScrollView>
   );
 }
@@ -90,117 +246,270 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 20,
+    paddingBottom: 40,
   },
   header: {
-    alignItems: 'center',
-    marginBottom: 32,
-    paddingTop: 20,
-  },
-  iconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.dark.primaryGlow,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.dark.text,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: Colors.dark.textSecondary,
-    textAlign: 'center',
-  },
-  userInfo: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
+    paddingTop: 8,
   },
-  userInfoLabel: {
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    marginBottom: 4,
-  },
-  userInfoEmail: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.text,
-    marginBottom: 12,
-  },
-  adminBadge: {
+  adminBadgeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(126, 200, 139, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginBottom: 12,
   },
-  adminBadgeText: {
-    fontSize: 13,
+  adminBadgeHeaderText: {
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.dark.success,
   },
-  uploadSection: {
-    marginBottom: 32,
+  welcomeText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+    marginBottom: 2,
+  },
+  emailText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.dark.text,
+  },
+  sectionContent: {
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    borderTopWidth: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   uploadButton: {
-    backgroundColor: Colors.dark.surfaceElevated,
-    borderRadius: 16,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
     padding: 24,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: Colors.dark.border,
     borderStyle: 'dashed',
+    marginBottom: 16,
   },
   uploadButtonText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.dark.text,
     marginTop: 12,
   },
   uploadButtonSubtext: {
-    fontSize: 14,
+    fontSize: 13,
     color: Colors.dark.textMuted,
     marginTop: 4,
   },
-  infoSection: {
+  guidelinesCard: {
     backgroundColor: Colors.dark.surface,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
+    borderRadius: 10,
+    padding: 14,
   },
-  infoTitle: {
-    fontSize: 16,
+  guidelinesTitle: {
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.dark.text,
-    marginBottom: 16,
+    color: Colors.dark.textSecondary,
+    marginBottom: 10,
   },
-  infoItem: {
+  guidelineItem: {
     flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  guidelineDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: Colors.dark.primary,
+    marginRight: 10,
+  },
+  guidelineText: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    padding: 24,
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+  },
+  totalTracksCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    gap: 14,
+  },
+  totalTracksIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: Colors.dark.primaryGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  totalTracksInfo: {
+    flex: 1,
+  },
+  totalTracksLabel: {
+    fontSize: 13,
+    color: Colors.dark.textMuted,
+    marginBottom: 2,
+  },
+  totalTracksValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: Colors.dark.text,
+  },
+  modalityStatsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.dark.textSecondary,
     marginBottom: 12,
   },
-  infoBullet: {
-    fontSize: 14,
-    color: Colors.dark.primary,
-    marginRight: 10,
-    fontWeight: '600',
+  modalityList: {
+    gap: 8,
   },
-  infoText: {
+  modalityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 12,
+  },
+  modalityRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: Colors.dark.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  modalityRankText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.dark.textMuted,
+  },
+  modalityName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.dark.text,
+  },
+  modalityCountBadge: {
+    backgroundColor: Colors.dark.primaryGlow,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  modalityCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.dark.primary,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+    textAlign: 'center',
+    padding: 16,
+  },
+  errorText: {
+    fontSize: 14,
+    color: Colors.dark.error,
+    textAlign: 'center',
+    padding: 16,
+  },
+  comingSoonCard: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  comingSoonIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: Colors.dark.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  comingSoonTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: Colors.dark.text,
+    marginBottom: 8,
+  },
+  comingSoonText: {
     fontSize: 14,
     color: Colors.dark.textSecondary,
-    flex: 1,
+    textAlign: 'center',
     lineHeight: 20,
+    marginBottom: 24,
+  },
+  plannedFeatures: {
+    width: '100%',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    padding: 16,
+  },
+  plannedFeaturesTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.dark.textMuted,
+    marginBottom: 12,
+  },
+  plannedFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  plannedFeatureText: {
+    fontSize: 13,
+    color: Colors.dark.textSecondary,
   },
   accessDenied: {
     flex: 1,
@@ -219,5 +528,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.dark.textSecondary,
     textAlign: 'center',
+  },
+  footer: {
+    height: 20,
   },
 });

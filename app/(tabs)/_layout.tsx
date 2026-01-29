@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Disc3, Compass, Heart, User, Upload } from "lucide-react-native";
+import { Disc3, Compass, Heart, User, Settings } from "lucide-react-native";
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Colors from "@/constants/colors";
@@ -65,8 +65,8 @@ export default function TabLayout() {
         <Tabs.Screen
           name="(upload)"
           options={{
-            title: "Upload",
-            tabBarIcon: ({ color, size }) => <Upload color={color} size={size - 2} strokeWidth={1.5} />,
+            title: "Admin",
+            tabBarIcon: ({ color, size }) => <Settings color={color} size={size - 2} strokeWidth={1.5} />,
             href: isAdmin ? "/(tabs)/(upload)" : null,
           }}
         />

@@ -20,7 +20,7 @@ export default function UploadLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: 'Upload',
+          title: 'Admin Dashboard',
         }}
       />
     </Stack>
