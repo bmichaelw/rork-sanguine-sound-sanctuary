@@ -7,9 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Modal,
-  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Upload, 
@@ -30,6 +29,17 @@ export default function AdminScreen() {
   const { user, isAdmin } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('stats');
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  const handleOpenUploadForm = () => {
+    console.log('[Admin] Upload button pressed, opening form...');
+    setShowUploadForm(true);
+  };
+
+  const handleCloseUploadForm = () => {
+    console.log('[Admin] Closing upload form');
+    setShowUploadForm(false);
+  };
 
   const { data: stats, isLoading, refetch, isRefetching } = useQuery<LibraryStats>({
     queryKey: ['libraryStats'],
@@ -100,7 +110,7 @@ export default function AdminScreen() {
           <TouchableOpacity 
             style={styles.uploadButton} 
             activeOpacity={0.8}
-            onPress={() => setShowUploadForm(true)}
+            onPress={handleOpenUploadForm}
           >
             <Music color={Colors.dark.text} size={28} strokeWidth={1.5} />
             <Text style={styles.uploadButtonText}>Upload New Track</Text>
@@ -244,20 +254,18 @@ export default function AdminScreen() {
 
       <View style={styles.footer} />
 
-      <Modal
-        visible={showUploadForm}
-        animationType="slide"
-        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
-        onRequestClose={() => setShowUploadForm(false)}
-      >
-        <UploadTrackForm
-          onClose={() => setShowUploadForm(false)}
-          onSuccess={() => {
-            setShowUploadForm(false);
-            refetch();
-          }}
-        />
-      </Modal>
+      {showUploadForm && (
+        <View style={[styles.fullScreenOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+          <UploadTrackForm
+            onClose={handleCloseUploadForm}
+            onSuccess={() => {
+              console.log('[Admin] Upload success, closing form');
+              handleCloseUploadForm();
+              refetch();
+            }}
+          />
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -554,5 +562,14 @@ const styles = StyleSheet.create({
   },
   footer: {
     height: 20,
+  },
+  fullScreenOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.dark.background,
+    zIndex: 1000,
   },
 });
