@@ -339,7 +339,7 @@ export default function BrowseScreen() {
                     <View style={styles.listContent}>
                       <Text style={styles.listTitle} numberOfLines={1}>{track.title}</Text>
                       <View style={styles.listPills}>
-                        {track.modalities.slice(0, 1).map(m => (
+                        {track.modalities.map(m => (
                           <View key={m.id} style={styles.listPill}>
                             <Text style={styles.listPillText}>{m.name}</Text>
                           </View>
