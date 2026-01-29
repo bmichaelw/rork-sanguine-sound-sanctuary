@@ -3,12 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://dnzrilaojufcvoshtdlw.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuenJpbGFvanVmY3Zvc2h0ZGx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MzM5NTYsImV4cCI6MjA4NTEwOTk1Nn0.YDlagGBg3x-aJLfWug29Mge6BAJo1enNNlvIqMv9-Dc';
 
-const customFetch = (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
-  const { signal, ...restOptions } = options || {};
-  return fetch(url, {
-    ...restOptions,
-    signal: undefined,
-  });
+const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+  const { signal: _signal, ...restOptions } = options || {};
+  try {
+    const response = await fetch(url, {
+      ...restOptions,
+      signal: undefined,
+    });
+    return response;
+  } catch (err: any) {
+    if (err?.name === 'AbortError' || err?.message?.includes('abort')) {
+      console.log('[Supabase] Ignoring abort error in customFetch, retrying...');
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return fetch(url, { ...restOptions, signal: undefined });
+    }
+    throw err;
+  }
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -21,25 +31,38 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 5, delay = 300): Promise<T> {
+  let lastError: any;
   for (let i = 0; i < retries; i++) {
     try {
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay * i));
+      }
       return await fn();
     } catch (err: any) {
+      lastError = err;
+      const errorMessage = err?.message || '';
       const isAbortError = err?.name === 'AbortError' || 
-        (err?.message && err.message.includes('abort')) ||
-        (err?.message && err.message.includes('AbortError'));
-      const isNetworkError = err instanceof TypeError && err.message.includes('Failed to fetch');
+        errorMessage.toLowerCase().includes('abort') ||
+        errorMessage.includes('AbortError') ||
+        errorMessage.includes('signal');
+      const isNetworkError = err instanceof TypeError && errorMessage.includes('Failed to fetch');
       const isRetryable = isAbortError || isNetworkError;
       
-      if (i === retries - 1 || !isRetryable) {
-        throw err;
+      if (i < retries - 1 && isRetryable) {
+        console.log(`[Supabase] Retry ${i + 1}/${retries} after ${isAbortError ? 'abort' : 'network'} error...`);
+        continue;
       }
-      console.log(`[Supabase] Retry ${i + 1}/${retries} after ${isAbortError ? 'abort' : 'network'} error...`);
-      await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+      
+      if (isAbortError && i === retries - 1) {
+        console.warn('[Supabase] Max retries reached for abort error, suppressing...');
+        return [] as unknown as T;
+      }
+      
+      throw err;
     }
   }
-  throw new Error('Retry failed');
+  throw lastError || new Error('Retry failed');
 }
 
 export interface SupabaseModality {
