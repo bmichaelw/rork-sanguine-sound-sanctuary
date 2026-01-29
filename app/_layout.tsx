@@ -31,6 +31,13 @@ function RootLayoutNav() {
           animation: 'fade',
         }} 
       />
+      <Stack.Screen 
+        name="test-upload" 
+        options={{ 
+          title: 'Test Upload',
+          presentation: 'modal',
+        }} 
+      />
     </Stack>
   );
 }
