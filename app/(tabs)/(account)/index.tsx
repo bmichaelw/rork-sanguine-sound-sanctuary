@@ -160,6 +160,22 @@ export default function AccountScreen() {
           </View>
         )}
 
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>DEBUG</Text>
+          
+          <TouchableOpacity 
+            style={styles.linkRow} 
+            activeOpacity={0.7}
+            onPress={() => router.push('/test-upload')}
+          >
+            <View style={styles.settingIcon}>
+              <TestTube color={Colors.dark.warning} size={20} />
+            </View>
+            <Text style={styles.linkTitle}>Test Upload (Debug)</Text>
+            <ChevronRight color={Colors.dark.textMuted} size={20} />
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.membershipCard}>
           <LinearGradient
             colors={membership.isPaid 
