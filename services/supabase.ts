@@ -192,112 +192,27 @@ export async function fetchIntensities(): Promise<SupabaseIntensity[]> {
 }
 
 export async function fetchTracks(): Promise<SupabaseTrack[]> {
-  console.log('[Supabase] Fetching tracks...');
+  console.log('[Supabase] Fetching tracks with nested selects...');
   try {
-    const { data: tracksData, error: tracksError } = await supabase
+    const { data, error } = await supabase
       .from('tracks')
-      .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe');
+      .select(`
+        *,
+        track_modalities(modality_id, modalities(id, name, description, image_url)),
+        track_intentions(intention_id, intentions(id, name, description)),
+        track_soundscapes(soundscape_id, soundscapes(id, name, description)),
+        track_chakras(chakra_id, chakras(id, name, description)),
+        intensities(id, name)
+      `);
 
-    console.log('[Supabase] Raw tracksData response:', JSON.stringify(tracksData, null, 2));
-    console.log('[Supabase] tracksError:', tracksError);
-
-    if (tracksError) {
-      console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksError, null, 2));
-      throw new Error(`Failed to fetch tracks: ${tracksError.message || tracksError.code || 'Unknown error'}`);
+    if (error) {
+      console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to fetch tracks: ${error.message || error.code || 'Unknown error'}`);
     }
 
-    const trackIds: string[] = (tracksData || []).map((t: any) => String(t.id));
-    console.log('[Supabase] trackIds type check - isArray:', Array.isArray(trackIds), 'length:', trackIds.length);
-    console.log('[Supabase] First 3 trackIds:', trackIds.slice(0, 3));
-    console.log('[Supabase] trackIds includes target:', trackIds.includes('6434f9d9-ee6e-4bd0-b318-d55e44863529'));
-    
-    if (trackIds.length === 0) {
-      return [];
-    }
+    console.log('[Supabase] Raw nested data sample:', JSON.stringify(data?.[0], null, 2));
 
-    const [modalitiesRes, intentionsRes, soundscapesRes, chakrasRes, intensitiesRes] = await Promise.all([
-      supabase.from('track_modalities').select('track_id, modality_id').in('track_id', trackIds),
-      supabase.from('track_intentions').select('track_id, intention_id').in('track_id', trackIds),
-      supabase.from('track_soundscapes').select('track_id, soundscape_id').in('track_id', trackIds),
-      supabase.from('track_chakras').select('track_id, chakra_id').in('track_id', trackIds),
-      supabase.from('intensities').select('id, name'),
-    ]);
-
-    console.log('[Supabase] Join table RAW data - track_modalities:', JSON.stringify(modalitiesRes.data?.slice(0, 5)));
-    console.log('[Supabase] Join table RAW data - track_intentions:', JSON.stringify(intentionsRes.data?.slice(0, 5)));
-    console.log('[Supabase] Join table RAW data - track_soundscapes:', JSON.stringify(soundscapesRes.data?.slice(0, 5)));
-    console.log('[Supabase] Join table RAW data - track_chakras:', JSON.stringify(chakrasRes.data?.slice(0, 5)));
-    
-    console.log('[Supabase] Join table counts - modalities:', modalitiesRes.data?.length, 'intentions:', intentionsRes.data?.length, 'soundscapes:', soundscapesRes.data?.length, 'chakras:', chakrasRes.data?.length);
-    
-    if (modalitiesRes.error) console.error('[Supabase] track_modalities error:', JSON.stringify(modalitiesRes.error));
-    if (intentionsRes.error) console.error('[Supabase] track_intentions error:', JSON.stringify(intentionsRes.error));
-    if (soundscapesRes.error) console.error('[Supabase] track_soundscapes error:', JSON.stringify(soundscapesRes.error));
-    if (chakrasRes.error) console.error('[Supabase] track_chakras error:', JSON.stringify(chakrasRes.error));
-    
-    const targetTrackModalities = (modalitiesRes.data || []).filter((tm: any) => tm.track_id === '6434f9d9-ee6e-4bd0-b318-d55e44863529');
-    console.log('[Supabase] Target track modalities found:', targetTrackModalities.length, JSON.stringify(targetTrackModalities));
-
-    const [allModalities, allIntentions, allSoundscapes, allChakras] = await Promise.all([
-      supabase.from('modalities').select('id, name, description, image_url'),
-      supabase.from('intentions').select('id, name, description'),
-      supabase.from('soundscapes').select('id, name, description'),
-      supabase.from('chakras').select('id, name, description'),
-    ]);
-
-    console.log('[Supabase] Reference tables - modalities:', allModalities.data?.length, 'rows');
-    console.log('[Supabase] Reference tables - intentions:', allIntentions.data?.length, 'rows');
-    console.log('[Supabase] Reference tables - soundscapes:', allSoundscapes.data?.length, 'rows');
-    console.log('[Supabase] Reference tables - chakras:', allChakras.data?.length, 'rows');
-
-    const modalitiesMap = new Map((allModalities.data || []).map((m: any) => [m.id, m]));
-    const intentionsMap = new Map((allIntentions.data || []).map((i: any) => [i.id, i]));
-    const soundscapesMap = new Map((allSoundscapes.data || []).map((s: any) => [s.id, s]));
-    const chakrasMap = new Map((allChakras.data || []).map((c: any) => [c.id, c]));
-    const intensitiesMap = new Map((intensitiesRes.data || []).map((i: any) => [i.id, i]));
-
-    const trackModalitiesMap = new Map<string, any[]>();
-    const trackIntentionsMap = new Map<string, any[]>();
-    const trackSoundscapesMap = new Map<string, any[]>();
-    const trackChakrasMap = new Map<string, any[]>();
-
-    (modalitiesRes.data || []).forEach((tm: any) => {
-      const modality = modalitiesMap.get(tm.modality_id);
-      if (modality) {
-        const arr = trackModalitiesMap.get(tm.track_id) || [];
-        arr.push(modality);
-        trackModalitiesMap.set(tm.track_id, arr);
-      }
-    });
-
-    (intentionsRes.data || []).forEach((ti: any) => {
-      const intention = intentionsMap.get(ti.intention_id);
-      if (intention) {
-        const arr = trackIntentionsMap.get(ti.track_id) || [];
-        arr.push(intention);
-        trackIntentionsMap.set(ti.track_id, arr);
-      }
-    });
-
-    (soundscapesRes.data || []).forEach((ts: any) => {
-      const soundscape = soundscapesMap.get(ts.soundscape_id);
-      if (soundscape) {
-        const arr = trackSoundscapesMap.get(ts.track_id) || [];
-        arr.push(soundscape);
-        trackSoundscapesMap.set(ts.track_id, arr);
-      }
-    });
-
-    (chakrasRes.data || []).forEach((tc: any) => {
-      const chakra = chakrasMap.get(tc.chakra_id);
-      if (chakra) {
-        const arr = trackChakrasMap.get(tc.track_id) || [];
-        arr.push(chakra);
-        trackChakrasMap.set(tc.track_id, arr);
-      }
-    });
-
-    const transformedTracks: SupabaseTrack[] = (tracksData || []).map((track: any) => ({
+    const transformedTracks: SupabaseTrack[] = (data || []).map((track: any) => ({
       id: track.id,
       title: track.title,
       duration: track.duration,
@@ -309,11 +224,11 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       words: track.words ?? false,
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
-      intensity: track.intensity_id ? intensitiesMap.get(track.intensity_id) : undefined,
-      modalities: trackModalitiesMap.get(track.id) || [],
-      intentions: trackIntentionsMap.get(track.id) || [],
-      soundscapes: trackSoundscapesMap.get(track.id) || [],
-      chakras: trackChakrasMap.get(track.id) || [],
+      intensity: track.intensities || undefined,
+      modalities: (track.track_modalities || []).map((tm: any) => tm.modalities).filter(Boolean),
+      intentions: (track.track_intentions || []).map((ti: any) => ti.intentions).filter(Boolean),
+      soundscapes: (track.track_soundscapes || []).map((ts: any) => ts.soundscapes).filter(Boolean),
+      chakras: (track.track_chakras || []).map((tc: any) => tc.chakras).filter(Boolean),
     }));
 
     console.log('[Supabase] Fetched tracks:', transformedTracks.length);
@@ -355,79 +270,24 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
 
     const trackIds = trackIdsData.map(t => t.track_id);
     
-    const { data: tracksData, error: tracksError } = await supabase
+    const { data, error } = await supabase
       .from('tracks')
-      .select('id, title, duration, image_url, audio_url, intensity_id, channeled, voice, words, sleep_safe, trip_safe')
+      .select(`
+        *,
+        track_modalities(modality_id, modalities(id, name, description, image_url)),
+        track_intentions(intention_id, intentions(id, name, description)),
+        track_soundscapes(soundscape_id, soundscapes(id, name, description)),
+        track_chakras(chakra_id, chakras(id, name, description)),
+        intensities(id, name)
+      `)
       .in('id', trackIds);
 
-    if (tracksError) {
-      console.error('[Supabase] Error fetching tracks:', JSON.stringify(tracksError, null, 2));
-      throw new Error(`Failed to fetch tracks: ${tracksError.message}`);
+    if (error) {
+      console.error('[Supabase] Error fetching tracks:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to fetch tracks: ${error.message}`);
     }
 
-    const [modalitiesRes, intentionsRes, soundscapesRes, chakrasRes, intensitiesRes] = await Promise.all([
-      supabase.from('track_modalities').select('track_id, modality_id').in('track_id', trackIds),
-      supabase.from('track_intentions').select('track_id, intention_id').in('track_id', trackIds),
-      supabase.from('track_soundscapes').select('track_id, soundscape_id').in('track_id', trackIds),
-      supabase.from('track_chakras').select('track_id, chakra_id').in('track_id', trackIds),
-      supabase.from('intensities').select('id, name'),
-    ]);
-
-    const [allModalities, allIntentions, allSoundscapes, allChakras] = await Promise.all([
-      supabase.from('modalities').select('id, name, description, image_url'),
-      supabase.from('intentions').select('id, name, description'),
-      supabase.from('soundscapes').select('id, name, description'),
-      supabase.from('chakras').select('id, name, description'),
-    ]);
-
-    const modalitiesMap = new Map((allModalities.data || []).map((m: any) => [m.id, m]));
-    const intentionsMap = new Map((allIntentions.data || []).map((i: any) => [i.id, i]));
-    const soundscapesMap = new Map((allSoundscapes.data || []).map((s: any) => [s.id, s]));
-    const chakrasMap = new Map((allChakras.data || []).map((c: any) => [c.id, c]));
-    const intensitiesMap = new Map((intensitiesRes.data || []).map((i: any) => [i.id, i]));
-
-    const trackModalitiesMap = new Map<string, any[]>();
-    const trackIntentionsMap = new Map<string, any[]>();
-    const trackSoundscapesMap = new Map<string, any[]>();
-    const trackChakrasMap = new Map<string, any[]>();
-
-    (modalitiesRes.data || []).forEach((tm: any) => {
-      const modality = modalitiesMap.get(tm.modality_id);
-      if (modality) {
-        const arr = trackModalitiesMap.get(tm.track_id) || [];
-        arr.push(modality);
-        trackModalitiesMap.set(tm.track_id, arr);
-      }
-    });
-
-    (intentionsRes.data || []).forEach((ti: any) => {
-      const intention = intentionsMap.get(ti.intention_id);
-      if (intention) {
-        const arr = trackIntentionsMap.get(ti.track_id) || [];
-        arr.push(intention);
-        trackIntentionsMap.set(ti.track_id, arr);
-      }
-    });
-
-    (soundscapesRes.data || []).forEach((ts: any) => {
-      const soundscape = soundscapesMap.get(ts.soundscape_id);
-      if (soundscape) {
-        const arr = trackSoundscapesMap.get(ts.track_id) || [];
-        arr.push(soundscape);
-        trackSoundscapesMap.set(ts.track_id, arr);
-      }
-    });
-
-    (chakrasRes.data || []).forEach((tc: any) => {
-      const chakra = chakrasMap.get(tc.chakra_id);
-      if (chakra) {
-        const arr = trackChakrasMap.get(tc.track_id) || [];
-        arr.push(chakra);
-        trackChakrasMap.set(tc.track_id, arr);
-      }
-    });
-
-    const transformedTracks: SupabaseTrack[] = (tracksData || []).map((track: any) => ({
+    const transformedTracks: SupabaseTrack[] = (data || []).map((track: any) => ({
       id: track.id,
       title: track.title,
       duration: track.duration,
@@ -439,11 +299,11 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
       words: track.words ?? false,
       sleep_safe: track.sleep_safe ?? false,
       trip_safe: track.trip_safe ?? false,
-      intensity: track.intensity_id ? intensitiesMap.get(track.intensity_id) : undefined,
-      modalities: trackModalitiesMap.get(track.id) || [],
-      intentions: trackIntentionsMap.get(track.id) || [],
-      soundscapes: trackSoundscapesMap.get(track.id) || [],
-      chakras: trackChakrasMap.get(track.id) || [],
+      intensity: track.intensities || undefined,
+      modalities: (track.track_modalities || []).map((tm: any) => tm.modalities).filter(Boolean),
+      intentions: (track.track_intentions || []).map((ti: any) => ti.intentions).filter(Boolean),
+      soundscapes: (track.track_soundscapes || []).map((ts: any) => ts.soundscapes).filter(Boolean),
+      chakras: (track.track_chakras || []).map((tc: any) => tc.chakras).filter(Boolean),
     }));
 
     console.log('[Supabase] Fetched tracks for modality:', transformedTracks.length);
