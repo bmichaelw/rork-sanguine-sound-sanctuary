@@ -8,21 +8,23 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
   },
-  global: {
-    fetch: (...args) => fetch(...args),
-  },
 });
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
-    } catch (err) {
+    } catch (err: any) {
+      const isAbortError = err?.name === 'AbortError' || 
+        (err?.message && err.message.includes('abort')) ||
+        (err?.message && err.message.includes('AbortError'));
       const isNetworkError = err instanceof TypeError && err.message.includes('Failed to fetch');
-      if (i === retries - 1 || !isNetworkError) {
+      const isRetryable = isAbortError || isNetworkError;
+      
+      if (i === retries - 1 || !isRetryable) {
         throw err;
       }
-      console.log(`[Supabase] Retry ${i + 1}/${retries} after network error...`);
+      console.log(`[Supabase] Retry ${i + 1}/${retries} after ${isAbortError ? 'abort' : 'network'} error...`);
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
     }
   }
@@ -88,7 +90,7 @@ export interface SupabaseCollection {
 
 export async function fetchModalities(): Promise<SupabaseModality[]> {
   console.log('[Supabase] Fetching modalities...');
-  try {
+  return withRetry(async () => {
     const { data, error } = await supabase
       .from('modalities')
       .select('*');
@@ -100,16 +102,12 @@ export async function fetchModalities(): Promise<SupabaseModality[]> {
 
     console.log('[Supabase] Fetched modalities:', data?.length || 0);
     return data || [];
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching modalities:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchIntentions(): Promise<SupabaseIntention[]> {
   console.log('[Supabase] Fetching intentions...');
-  try {
+  return withRetry(async () => {
     const { data, error } = await supabase
       .from('intentions')
       .select('*');
@@ -121,16 +119,12 @@ export async function fetchIntentions(): Promise<SupabaseIntention[]> {
 
     console.log('[Supabase] Fetched intentions:', data?.length || 0);
     return data || [];
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching intentions:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchSoundscapes(): Promise<SupabaseSoundscape[]> {
   console.log('[Supabase] Fetching soundscapes...');
-  try {
+  return withRetry(async () => {
     const { data, error } = await supabase
       .from('soundscapes')
       .select('*');
@@ -142,16 +136,12 @@ export async function fetchSoundscapes(): Promise<SupabaseSoundscape[]> {
 
     console.log('[Supabase] Fetched soundscapes:', data?.length || 0);
     return data || [];
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching soundscapes:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchChakras(): Promise<SupabaseChakra[]> {
   console.log('[Supabase] Fetching chakras...');
-  try {
+  return withRetry(async () => {
     const { data, error } = await supabase
       .from('chakras')
       .select('*');
@@ -163,16 +153,12 @@ export async function fetchChakras(): Promise<SupabaseChakra[]> {
 
     console.log('[Supabase] Fetched chakras:', data?.length || 0);
     return data || [];
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching chakras:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchIntensities(): Promise<SupabaseIntensity[]> {
   console.log('[Supabase] Fetching intensities...');
-  try {
+  return withRetry(async () => {
     const { data, error } = await supabase
       .from('intensities')
       .select('id, name');
@@ -184,16 +170,12 @@ export async function fetchIntensities(): Promise<SupabaseIntensity[]> {
 
     console.log('[Supabase] Fetched intensities:', data?.length || 0);
     return data || [];
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching intensities:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchTracks(): Promise<SupabaseTrack[]> {
   console.log('[Supabase] Fetching tracks with nested selects...');
-  try {
+  return withRetry(async () => {
     const [tracksResult, intensitiesResult] = await Promise.all([
       supabase
         .from('tracks')
@@ -249,16 +231,12 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       });
     }
     return transformedTracks;
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching tracks:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchTracksByModality(modalityId: string): Promise<SupabaseTrack[]> {
   console.log('[Supabase] Fetching tracks for modality:', modalityId);
-  try {
+  return withRetry(async () => {
     const { data: trackIdsData, error: joinError } = await supabase
       .from('track_modalities')
       .select('track_id')
@@ -319,11 +297,7 @@ export async function fetchTracksByModality(modalityId: string): Promise<Supabas
 
     console.log('[Supabase] Fetched tracks for modality:', transformedTracks.length);
     return transformedTracks;
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching tracks by modality:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export interface LibraryStats {
@@ -333,7 +307,7 @@ export interface LibraryStats {
 
 export async function fetchLibraryStats(): Promise<LibraryStats> {
   console.log('[Supabase] Fetching library stats...');
-  try {
+  return withRetry(async () => {
     const [tracksResult, modalitiesResult, trackModalitiesResult] = await Promise.all([
       supabase.from('tracks').select('id', { count: 'exact', head: true }),
       supabase.from('modalities').select('id, name'),
@@ -355,11 +329,7 @@ export async function fetchLibraryStats(): Promise<LibraryStats> {
 
     console.log('[Supabase] Library stats:', { totalTracks, modalitiesCount: tracksPerModality.length });
     return { totalTracks, tracksPerModality };
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);
-    console.error('[Supabase] Exception fetching library stats:', errorMessage);
-    throw err;
-  }
+  });
 }
 
 export async function fetchCollections(): Promise<SupabaseCollection[]> {
