@@ -8,6 +8,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
   },
+  global: {
+    fetch: (url, options) => {
+      const { signal, ...restOptions } = options || {};
+      return fetch(url, restOptions);
+    },
+  },
 });
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
