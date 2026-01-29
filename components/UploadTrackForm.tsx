@@ -114,16 +114,28 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       if (!duration || isNaN(parseInt(duration))) throw new Error('Valid duration is required');
 
       console.log('[Upload] Starting upload process...');
+      console.log('[Upload] Audio file URI:', audioFile.uri);
       
       const timestamp = Date.now();
       const audioPath = `tracks/${timestamp}_${audioFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
-      console.log('[Upload] Fetching audio file...');
-      const audioResponse = await fetch(audioFile.uri);
-      const audioBlob = await audioResponse.blob();
+      let audioBlob: Blob;
+      try {
+        console.log('[Upload] Fetching audio file...');
+        const audioResponse = await fetch(audioFile.uri);
+        if (!audioResponse.ok) {
+          throw new Error(`Failed to fetch audio file: ${audioResponse.status}`);
+        }
+        audioBlob = await audioResponse.blob();
+        console.log('[Upload] Audio blob created, size:', audioBlob.size);
+      } catch (fetchError) {
+        console.error('[Upload] Error fetching audio file:', fetchError);
+        throw new Error('Failed to read audio file. Please try selecting the file again.');
+      }
 
       console.log('[Upload] Uploading audio to storage...');
       const audioUrl = await uploadFileToStorage('audio', audioPath, audioBlob, audioFile.mimeType);
+      console.log('[Upload] Audio uploaded successfully:', audioUrl);
       
       let finalImageUrl: string;
       
@@ -132,12 +144,23 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         finalImageUrl = imageUrl.trim();
       } else {
         const imagePath = `covers/${timestamp}_${imageFile!.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-        console.log('[Upload] Fetching image file...');
-        const imageResponse = await fetch(imageFile!.uri);
-        const imageBlob = await imageResponse.blob();
+        let imageBlob: Blob;
+        try {
+          console.log('[Upload] Fetching image file...');
+          const imageResponse = await fetch(imageFile!.uri);
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to fetch image file: ${imageResponse.status}`);
+          }
+          imageBlob = await imageResponse.blob();
+          console.log('[Upload] Image blob created, size:', imageBlob.size);
+        } catch (fetchError) {
+          console.error('[Upload] Error fetching image file:', fetchError);
+          throw new Error('Failed to read image file. Please try selecting the file again.');
+        }
         
         console.log('[Upload] Uploading image to storage...');
         finalImageUrl = await uploadFileToStorage('images', imagePath, imageBlob, imageFile!.mimeType);
+        console.log('[Upload] Image uploaded successfully:', finalImageUrl);
       }
 
       const trackData: UploadTrackData = {

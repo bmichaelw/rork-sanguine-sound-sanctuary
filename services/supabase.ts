@@ -399,26 +399,38 @@ export async function uploadFileToStorage(
   file: Blob | ArrayBuffer,
   contentType: string
 ): Promise<string> {
-  console.log(`[Supabase] Uploading file to ${bucket}/${path}...`);
+  console.log(`[Supabase] Uploading file to ${bucket}/${path}, size: ${file instanceof Blob ? file.size : 'ArrayBuffer'}...`);
   
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(path, file, {
-      contentType,
-      upsert: true,
-    });
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error('Upload timed out after 60 seconds')), 60000);
+  });
 
-  if (error) {
-    console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
-    throw new Error(`Failed to upload file: ${error.message}`);
+  try {
+    const uploadPromise = supabase.storage
+      .from(bucket)
+      .upload(path, file, {
+        contentType,
+        upsert: true,
+      });
+
+    const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
+
+    if (error) {
+      console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
+      throw new Error(`Failed to upload file: ${error.message}`);
+    }
+
+    console.log('[Supabase] Upload completed, getting public URL...');
+    const { data: urlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(path);
+
+    console.log('[Supabase] File uploaded successfully:', urlData.publicUrl);
+    return urlData.publicUrl;
+  } catch (err) {
+    console.error('[Supabase] Upload exception:', err);
+    throw err;
   }
-
-  const { data: urlData } = supabase.storage
-    .from(bucket)
-    .getPublicUrl(path);
-
-  console.log('[Supabase] File uploaded successfully:', urlData.publicUrl);
-  return urlData.publicUrl;
 }
 
 export async function createTrack(
