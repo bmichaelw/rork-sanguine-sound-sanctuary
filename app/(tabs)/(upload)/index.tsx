@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
+  Modal,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -23,10 +23,12 @@ import {
 import Colors from '@/constants/colors';
 import { useAuth } from '@/providers/AuthProvider';
 import { fetchLibraryStats, LibraryStats } from '@/services/supabase';
+import UploadTrackForm from '@/components/UploadTrackForm';
 
 export default function AdminScreen() {
   const { user, isAdmin } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('stats');
+  const [showUploadForm, setShowUploadForm] = useState(false);
 
   const { data: stats, isLoading, refetch, isRefetching } = useQuery<LibraryStats>({
     queryKey: ['libraryStats'],
@@ -97,13 +99,7 @@ export default function AdminScreen() {
           <TouchableOpacity 
             style={styles.uploadButton} 
             activeOpacity={0.8}
-            onPress={() => {
-              Alert.alert(
-                'Upload Track',
-                'Track upload functionality is coming soon. You will be able to upload audio files, add cover art, and tag your tracks with modalities, intentions, and soundscapes.',
-                [{ text: 'OK' }]
-              );
-            }}
+            onPress={() => setShowUploadForm(true)}
           >
             <Music color={Colors.dark.text} size={28} strokeWidth={1.5} />
             <Text style={styles.uploadButtonText}>Upload New Track</Text>
@@ -246,6 +242,21 @@ export default function AdminScreen() {
       )}
 
       <View style={styles.footer} />
+
+      <Modal
+        visible={showUploadForm}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowUploadForm(false)}
+      >
+        <UploadTrackForm
+          onClose={() => setShowUploadForm(false)}
+          onSuccess={() => {
+            setShowUploadForm(false);
+            refetch();
+          }}
+        />
+      </Modal>
     </ScrollView>
   );
 }

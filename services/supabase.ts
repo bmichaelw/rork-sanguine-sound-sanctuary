@@ -376,3 +376,135 @@ export async function fetchCollections(): Promise<SupabaseCollection[]> {
   console.log('[Supabase] Fetched collections:', data?.length || 0);
   return data || [];
 }
+
+export interface UploadTrackData {
+  title: string;
+  duration: number;
+  intensity_id: string | null;
+  channeled: boolean;
+  voice: boolean;
+  words: boolean;
+  sleep_safe: boolean;
+  trip_safe: boolean;
+  contains_dissonance: boolean;
+  modality_ids: string[];
+  intention_ids: string[];
+  soundscape_ids: string[];
+  chakra_ids: string[];
+}
+
+export async function uploadFileToStorage(
+  bucket: string,
+  path: string,
+  file: Blob | ArrayBuffer,
+  contentType: string
+): Promise<string> {
+  console.log(`[Supabase] Uploading file to ${bucket}/${path}...`);
+  
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(path, file, {
+      contentType,
+      upsert: true,
+    });
+
+  if (error) {
+    console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
+    throw new Error(`Failed to upload file: ${error.message}`);
+  }
+
+  const { data: urlData } = supabase.storage
+    .from(bucket)
+    .getPublicUrl(path);
+
+  console.log('[Supabase] File uploaded successfully:', urlData.publicUrl);
+  return urlData.publicUrl;
+}
+
+export async function createTrack(
+  trackData: UploadTrackData,
+  audioUrl: string,
+  imageUrl: string
+): Promise<SupabaseTrack> {
+  console.log('[Supabase] Creating track:', trackData.title);
+
+  const { data: track, error: trackError } = await supabase
+    .from('tracks')
+    .insert({
+      title: trackData.title,
+      duration: trackData.duration,
+      audio_url: audioUrl,
+      image_url: imageUrl,
+      intensity_id: trackData.intensity_id,
+      channeled: trackData.channeled,
+      voice: trackData.voice,
+      words: trackData.words,
+      sleep_safe: trackData.sleep_safe,
+      trip_safe: trackData.trip_safe,
+      contains_dissonance: trackData.contains_dissonance,
+    })
+    .select()
+    .single();
+
+  if (trackError) {
+    console.error('[Supabase] Error creating track:', JSON.stringify(trackError, null, 2));
+    throw new Error(`Failed to create track: ${trackError.message}`);
+  }
+
+  console.log('[Supabase] Track created with ID:', track.id);
+
+  const joinTablePromises: Promise<any>[] = [];
+
+  if (trackData.modality_ids.length > 0) {
+    const modalityRows = trackData.modality_ids.map(id => ({
+      track_id: track.id,
+      modality_id: id,
+    }));
+    joinTablePromises.push(
+      supabase.from('track_modalities').insert(modalityRows).then(({ error }) => {
+        if (error) console.error('[Supabase] Error inserting track_modalities:', error);
+      })
+    );
+  }
+
+  if (trackData.intention_ids.length > 0) {
+    const intentionRows = trackData.intention_ids.map(id => ({
+      track_id: track.id,
+      intention_id: id,
+    }));
+    joinTablePromises.push(
+      supabase.from('track_intentions').insert(intentionRows).then(({ error }) => {
+        if (error) console.error('[Supabase] Error inserting track_intentions:', error);
+      })
+    );
+  }
+
+  if (trackData.soundscape_ids.length > 0) {
+    const soundscapeRows = trackData.soundscape_ids.map(id => ({
+      track_id: track.id,
+      soundscape_id: id,
+    }));
+    joinTablePromises.push(
+      supabase.from('track_soundscapes').insert(soundscapeRows).then(({ error }) => {
+        if (error) console.error('[Supabase] Error inserting track_soundscapes:', error);
+      })
+    );
+  }
+
+  if (trackData.chakra_ids.length > 0) {
+    const chakraRows = trackData.chakra_ids.map(id => ({
+      track_id: track.id,
+      chakra_id: id,
+    }));
+    joinTablePromises.push(
+      supabase.from('track_chakras').insert(chakraRows).then(({ error }) => {
+        if (error) console.error('[Supabase] Error inserting track_chakras:', error);
+      })
+    );
+  }
+
+  await Promise.all(joinTablePromises);
+  console.log('[Supabase] All join table rows created');
+
+  return track as SupabaseTrack;
+}
