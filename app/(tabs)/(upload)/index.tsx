@@ -66,17 +66,18 @@ export default function AdminScreen() {
   };
 
   return (
-    <ScrollView 
-      style={styles.container} 
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={refetch}
-          tintColor={Colors.dark.primary}
-        />
-      }
-    >
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={Colors.dark.primary}
+          />
+        }
+      >
       <View style={styles.header}>
         <View style={styles.adminBadgeHeader}>
           <Shield color={Colors.dark.success} size={16} />
@@ -252,7 +253,8 @@ export default function AdminScreen() {
         </View>
       )}
 
-      <View style={styles.footer} />
+        <View style={styles.footer} />
+      </ScrollView>
 
       {showUploadForm && (
         <View style={[styles.fullScreenOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -266,7 +268,7 @@ export default function AdminScreen() {
           />
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -274,6 +276,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.dark.background,
+  },
+  scrollView: {
+    flex: 1,
   },
   content: {
     padding: 20,
