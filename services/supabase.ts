@@ -380,25 +380,28 @@ export async function uploadFileToStorage(
   file: Blob | ArrayBuffer,
   contentType: string
 ): Promise<string> {
-  console.log(`[Supabase] Uploading file to ${bucket}/${path}, size: ${file instanceof Blob ? file.size : 'ArrayBuffer'}...`);
+  const fileSize = file instanceof Blob ? file.size : (file as ArrayBuffer).byteLength;
+  console.log(`[Supabase] Uploading file to ${bucket}/${path}, size: ${fileSize}, type: ${contentType}...`);
   
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error('Upload timed out after 60 seconds')), 60000);
-  });
+  if (fileSize === 0) {
+    throw new Error('File is empty. Please select a valid file.');
+  }
 
   try {
-    const uploadPromise = supabase.storage
+    console.log('[Supabase] Starting upload to storage...');
+    
+    const result = await supabase.storage
       .from(bucket)
       .upload(path, file, {
         contentType,
         upsert: true,
       });
 
-    const { error } = await Promise.race([uploadPromise, timeoutPromise]);
+    console.log('[Supabase] Upload result:', JSON.stringify(result, null, 2));
 
-    if (error) {
-      console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
-      throw new Error(`Failed to upload file: ${error.message}`);
+    if (result.error) {
+      console.error('[Supabase] Upload error:', JSON.stringify(result.error, null, 2));
+      throw new Error(`Failed to upload file: ${result.error.message}`);
     }
 
     console.log('[Supabase] Upload completed, getting public URL...');
@@ -408,8 +411,14 @@ export async function uploadFileToStorage(
 
     console.log('[Supabase] File uploaded successfully:', urlData.publicUrl);
     return urlData.publicUrl;
-  } catch (err) {
-    console.error('[Supabase] Upload exception:', err);
+  } catch (err: any) {
+    console.error('[Supabase] Upload exception:', err?.message || err);
+    if (err?.message?.includes('storage/bucket-not-found') || err?.message?.includes('Bucket not found')) {
+      throw new Error(`Storage bucket '${bucket}' not found. Please contact support.`);
+    }
+    if (err?.message?.includes('storage/unauthorized') || err?.message?.includes('not authorized')) {
+      throw new Error('Not authorized to upload files. Please check your permissions.');
+    }
     throw err;
   }
 }

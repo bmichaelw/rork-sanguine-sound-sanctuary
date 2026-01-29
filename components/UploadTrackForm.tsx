@@ -114,28 +114,40 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       if (!duration || isNaN(parseInt(duration))) throw new Error('Valid duration is required');
 
       console.log('[Upload] Starting upload process...');
-      console.log('[Upload] Audio file URI:', audioFile.uri);
+      console.log('[Upload] Audio file:', JSON.stringify({ uri: audioFile.uri.substring(0, 100), name: audioFile.name, mimeType: audioFile.mimeType, size: audioFile.size }));
+      console.log('[Upload] Platform:', Platform.OS);
       
       const timestamp = Date.now();
       const audioPath = `tracks/${timestamp}_${audioFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
       let audioBlob: Blob;
       try {
-        console.log('[Upload] Fetching audio file...');
+        console.log('[Upload] Fetching audio file from URI...');
         const audioResponse = await fetch(audioFile.uri);
+        console.log('[Upload] Audio fetch response status:', audioResponse.status, audioResponse.ok);
         if (!audioResponse.ok) {
           throw new Error(`Failed to fetch audio file: ${audioResponse.status}`);
         }
         audioBlob = await audioResponse.blob();
-        console.log('[Upload] Audio blob created, size:', audioBlob.size);
-      } catch (fetchError) {
-        console.error('[Upload] Error fetching audio file:', fetchError);
+        console.log('[Upload] Audio blob created, size:', audioBlob.size, 'type:', audioBlob.type);
+        
+        if (audioBlob.size === 0) {
+          throw new Error('Audio file is empty. Please select a different file.');
+        }
+      } catch (fetchError: any) {
+        console.error('[Upload] Error fetching audio file:', fetchError?.message || fetchError);
         throw new Error('Failed to read audio file. Please try selecting the file again.');
       }
 
       console.log('[Upload] Uploading audio to storage...');
-      const audioUrl = await uploadFileToStorage('audio', audioPath, audioBlob, audioFile.mimeType);
-      console.log('[Upload] Audio uploaded successfully:', audioUrl);
+      let audioUrl: string;
+      try {
+        audioUrl = await uploadFileToStorage('audio', audioPath, audioBlob, audioFile.mimeType);
+        console.log('[Upload] Audio uploaded successfully:', audioUrl);
+      } catch (uploadError: any) {
+        console.error('[Upload] Audio upload failed:', uploadError?.message || uploadError);
+        throw new Error(`Audio upload failed: ${uploadError?.message || 'Unknown error'}`);
+      }
       
       let finalImageUrl: string;
       
@@ -146,21 +158,31 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         const imagePath = `covers/${timestamp}_${imageFile!.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         let imageBlob: Blob;
         try {
-          console.log('[Upload] Fetching image file...');
+          console.log('[Upload] Fetching image file from URI...');
           const imageResponse = await fetch(imageFile!.uri);
+          console.log('[Upload] Image fetch response status:', imageResponse.status, imageResponse.ok);
           if (!imageResponse.ok) {
             throw new Error(`Failed to fetch image file: ${imageResponse.status}`);
           }
           imageBlob = await imageResponse.blob();
-          console.log('[Upload] Image blob created, size:', imageBlob.size);
-        } catch (fetchError) {
-          console.error('[Upload] Error fetching image file:', fetchError);
+          console.log('[Upload] Image blob created, size:', imageBlob.size, 'type:', imageBlob.type);
+          
+          if (imageBlob.size === 0) {
+            throw new Error('Image file is empty. Please select a different file.');
+          }
+        } catch (fetchError: any) {
+          console.error('[Upload] Error fetching image file:', fetchError?.message || fetchError);
           throw new Error('Failed to read image file. Please try selecting the file again.');
         }
         
         console.log('[Upload] Uploading image to storage...');
-        finalImageUrl = await uploadFileToStorage('images', imagePath, imageBlob, imageFile!.mimeType);
-        console.log('[Upload] Image uploaded successfully:', finalImageUrl);
+        try {
+          finalImageUrl = await uploadFileToStorage('images', imagePath, imageBlob, imageFile!.mimeType);
+          console.log('[Upload] Image uploaded successfully:', finalImageUrl);
+        } catch (uploadError: any) {
+          console.error('[Upload] Image upload failed:', uploadError?.message || uploadError);
+          throw new Error(`Image upload failed: ${uploadError?.message || 'Unknown error'}`);
+        }
       }
 
       const trackData: UploadTrackData = {
@@ -179,9 +201,15 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         chakra_ids: selectedChakras,
       };
 
-      console.log('[Upload] Creating track record...');
-      const track = await createTrack(trackData, audioUrl, finalImageUrl);
-      console.log('[Upload] Track created successfully:', track.id);
+      console.log('[Upload] Creating track record in database...');
+      let track;
+      try {
+        track = await createTrack(trackData, audioUrl, finalImageUrl);
+        console.log('[Upload] Track created successfully:', track.id);
+      } catch (dbError: any) {
+        console.error('[Upload] Database insert failed:', dbError?.message || dbError);
+        throw new Error(`Failed to save track: ${dbError?.message || 'Unknown error'}`);
+      }
       
       return track;
     },
