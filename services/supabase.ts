@@ -389,7 +389,7 @@ export async function uploadFileToStorage(
         upsert: true,
       });
 
-    const { data, error } = await Promise.race([uploadPromise, timeoutPromise]);
+    const { error } = await Promise.race([uploadPromise, timeoutPromise]);
 
     if (error) {
       console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
@@ -441,7 +441,7 @@ export async function createTrack(
 
   console.log('[Supabase] Track created with ID:', track.id);
 
-  const joinTablePromises: Promise<any>[] = [];
+  const joinTablePromises: Promise<void>[] = [];
 
   if (trackData.modality_ids.length > 0) {
     const modalityRows = trackData.modality_ids.map(id => ({
@@ -449,9 +449,10 @@ export async function createTrack(
       modality_id: id,
     }));
     joinTablePromises.push(
-      supabase.from('track_modalities').insert(modalityRows).then(({ error }) => {
+      (async () => {
+        const { error } = await supabase.from('track_modalities').insert(modalityRows);
         if (error) console.error('[Supabase] Error inserting track_modalities:', error);
-      })
+      })()
     );
   }
 
@@ -461,9 +462,10 @@ export async function createTrack(
       intention_id: id,
     }));
     joinTablePromises.push(
-      supabase.from('track_intentions').insert(intentionRows).then(({ error }) => {
+      (async () => {
+        const { error } = await supabase.from('track_intentions').insert(intentionRows);
         if (error) console.error('[Supabase] Error inserting track_intentions:', error);
-      })
+      })()
     );
   }
 
@@ -473,9 +475,10 @@ export async function createTrack(
       soundscape_id: id,
     }));
     joinTablePromises.push(
-      supabase.from('track_soundscapes').insert(soundscapeRows).then(({ error }) => {
+      (async () => {
+        const { error } = await supabase.from('track_soundscapes').insert(soundscapeRows);
         if (error) console.error('[Supabase] Error inserting track_soundscapes:', error);
-      })
+      })()
     );
   }
 
@@ -485,9 +488,10 @@ export async function createTrack(
       chakra_id: id,
     }));
     joinTablePromises.push(
-      supabase.from('track_chakras').insert(chakraRows).then(({ error }) => {
+      (async () => {
+        const { error } = await supabase.from('track_chakras').insert(chakraRows);
         if (error) console.error('[Supabase] Error inserting track_chakras:', error);
-      })
+      })()
     );
   }
 
