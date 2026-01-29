@@ -412,6 +412,44 @@ export interface UploadTrackData {
   chakra_ids: string[];
 }
 
+async function uploadWithTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${operation} timed out after ${timeoutMs / 1000} seconds`));
+    }, timeoutMs);
+  });
+  
+  try {
+    const result = await Promise.race([promise, timeoutPromise]);
+    clearTimeout(timeoutId!);
+    return result;
+  } catch (err) {
+    clearTimeout(timeoutId!);
+    throw err;
+  }
+}
+
+export async function checkAuthStatus(): Promise<{ authenticated: boolean; userId?: string }> {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('[Supabase] Auth check error:', error.message);
+      return { authenticated: false };
+    }
+    if (session?.user) {
+      console.log('[Supabase] User authenticated:', session.user.id);
+      return { authenticated: true, userId: session.user.id };
+    }
+    console.log('[Supabase] No active session');
+    return { authenticated: false };
+  } catch (err) {
+    console.error('[Supabase] Auth check exception:', err);
+    return { authenticated: false };
+  }
+}
+
 export async function uploadFileToStorage(
   bucket: string,
   path: string,
@@ -425,23 +463,40 @@ export async function uploadFileToStorage(
     throw new Error('File is empty. Please select a valid file.');
   }
 
+  const authStatus = await checkAuthStatus();
+  console.log('[Supabase] Auth status before upload:', authStatus);
+
   try {
     console.log('[Supabase] Starting upload via SDK...');
     const startTime = Date.now();
     
-    const { data, error } = await supabase.storage
+    const uploadPromise = supabase.storage
       .from(bucket)
       .upload(path, file, {
         contentType,
         upsert: true,
       });
     
+    const timeoutMs = 120000;
+    const { data, error } = await uploadWithTimeout(uploadPromise, timeoutMs, 'Upload');
+    
     const elapsed = Date.now() - startTime;
     console.log(`[Supabase] Upload completed in ${elapsed}ms`);
 
     if (error) {
       console.error('[Supabase] Upload error:', JSON.stringify(error, null, 2));
+      
+      if (error.message?.includes('row-level security') || error.message?.includes('policy')) {
+        throw new Error('Upload permission denied. Please ensure you are logged in and have upload permissions.');
+      }
+      if (error.message?.includes('JWT') || error.message?.includes('token')) {
+        throw new Error('Authentication expired. Please log in again.');
+      }
       throw new Error(`Failed to upload file: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Upload completed but no data returned. Please try again.');
     }
 
     console.log('[Supabase] Upload result:', JSON.stringify(data, null, 2));
@@ -454,14 +509,21 @@ export async function uploadFileToStorage(
     return urlData.publicUrl;
   } catch (err: any) {
     console.error('[Supabase] Upload exception:', err?.message || err);
+    
+    if (err?.message?.includes('timed out')) {
+      throw new Error('Upload timed out. The file may be too large or your connection is slow. Please try again.');
+    }
     if (err?.message?.includes('bucket') && err?.message?.includes('not found')) {
       throw new Error(`Storage bucket '${bucket}' not found. Please contact support.`);
     }
     if (err?.message?.includes('unauthorized') || err?.message?.includes('not authorized')) {
-      throw new Error('Not authorized to upload files. Please check your permissions.');
+      throw new Error('Not authorized to upload files. Please log in again.');
     }
     if (err?.message?.includes('Payload too large')) {
       throw new Error('File is too large. Please use a smaller file.');
+    }
+    if (err?.message?.includes('Failed to fetch') || err?.message?.includes('NetworkError')) {
+      throw new Error('Network error during upload. Please check your connection and try again.');
     }
     throw err;
   }

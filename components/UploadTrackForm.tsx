@@ -34,6 +34,7 @@ import {
   fetchIntensities,
   uploadFileToStorage,
   createTrack,
+  checkAuthStatus,
   UploadTrackData,
   SupabaseModality,
   SupabaseIntention,
@@ -134,6 +135,13 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       if (!duration || isNaN(parseInt(duration))) throw new Error('Valid duration is required');
 
       console.log('[Upload] Starting upload process...');
+      
+      const authStatus = await checkAuthStatus();
+      console.log('[Upload] Auth status:', authStatus);
+      if (!authStatus.authenticated) {
+        throw new Error('You must be logged in to upload tracks. Please log in and try again.');
+      }
+      
       console.log('[Upload] Audio file:', JSON.stringify({ uri: audioFile.uri.substring(0, 100), name: audioFile.name, mimeType: audioFile.mimeType, size: audioFile.size }));
       console.log('[Upload] Platform:', Platform.OS);
       
@@ -143,7 +151,13 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       let audioBlob: Blob;
       try {
         console.log('[Upload] Fetching audio file from URI...');
-        const audioResponse = await fetch(audioFile.uri);
+        
+        const controller = new AbortController();
+        const fetchTimeoutId = setTimeout(() => controller.abort(), 30000);
+        
+        const audioResponse = await fetch(audioFile.uri, { signal: controller.signal });
+        clearTimeout(fetchTimeoutId);
+        
         console.log('[Upload] Audio fetch response status:', audioResponse.status, audioResponse.ok);
         if (!audioResponse.ok) {
           throw new Error(`Failed to fetch audio file: ${audioResponse.status}`);
@@ -156,6 +170,9 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         }
       } catch (fetchError: any) {
         console.error('[Upload] Error fetching audio file:', fetchError?.message || fetchError);
+        if (fetchError?.name === 'AbortError') {
+          throw new Error('Reading audio file timed out. Please try again.');
+        }
         throw new Error('Failed to read audio file. Please try selecting the file again.');
       }
 
@@ -166,7 +183,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         console.log('[Upload] Audio uploaded successfully:', audioUrl);
       } catch (uploadError: any) {
         console.error('[Upload] Audio upload failed:', uploadError?.message || uploadError);
-        throw new Error(`Audio upload failed: ${uploadError?.message || 'Unknown error'}`);
+        throw new Error(uploadError?.message || 'Audio upload failed');
       }
       
       let finalImageUrl: string;
@@ -179,7 +196,13 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         let imageBlob: Blob;
         try {
           console.log('[Upload] Fetching image file from URI...');
-          const imageResponse = await fetch(imageFile!.uri);
+          
+          const controller = new AbortController();
+          const fetchTimeoutId = setTimeout(() => controller.abort(), 30000);
+          
+          const imageResponse = await fetch(imageFile!.uri, { signal: controller.signal });
+          clearTimeout(fetchTimeoutId);
+          
           console.log('[Upload] Image fetch response status:', imageResponse.status, imageResponse.ok);
           if (!imageResponse.ok) {
             throw new Error(`Failed to fetch image file: ${imageResponse.status}`);
@@ -192,6 +215,9 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
           }
         } catch (fetchError: any) {
           console.error('[Upload] Error fetching image file:', fetchError?.message || fetchError);
+          if (fetchError?.name === 'AbortError') {
+            throw new Error('Reading image file timed out. Please try again.');
+          }
           throw new Error('Failed to read image file. Please try selecting the file again.');
         }
         
@@ -201,7 +227,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
           console.log('[Upload] Image uploaded successfully:', finalImageUrl);
         } catch (uploadError: any) {
           console.error('[Upload] Image upload failed:', uploadError?.message || uploadError);
-          throw new Error(`Image upload failed: ${uploadError?.message || 'Unknown error'}`);
+          throw new Error(uploadError?.message || 'Image upload failed');
         }
       }
 
