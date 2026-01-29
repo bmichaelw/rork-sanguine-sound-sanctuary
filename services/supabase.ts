@@ -206,7 +206,11 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       throw new Error(`Failed to fetch tracks: ${tracksError.message || tracksError.code || 'Unknown error'}`);
     }
 
-    const trackIds = (tracksData || []).map((t: any) => t.id);
+    const trackIds: string[] = (tracksData || []).map((t: any) => String(t.id));
+    console.log('[Supabase] trackIds type check - isArray:', Array.isArray(trackIds), 'length:', trackIds.length);
+    console.log('[Supabase] First 3 trackIds:', trackIds.slice(0, 3));
+    console.log('[Supabase] trackIds includes target:', trackIds.includes('6434f9d9-ee6e-4bd0-b318-d55e44863529'));
+    
     if (trackIds.length === 0) {
       return [];
     }
@@ -219,15 +223,20 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       supabase.from('intensities').select('id, name'),
     ]);
 
-    console.log('[Supabase] Join table data - track_modalities:', modalitiesRes.data?.length, 'rows');
-    console.log('[Supabase] Join table data - track_intentions:', intentionsRes.data?.length, 'rows');
-    console.log('[Supabase] Join table data - track_soundscapes:', soundscapesRes.data?.length, 'rows');
-    console.log('[Supabase] Join table data - track_chakras:', chakrasRes.data?.length, 'rows');
+    console.log('[Supabase] Join table RAW data - track_modalities:', JSON.stringify(modalitiesRes.data?.slice(0, 5)));
+    console.log('[Supabase] Join table RAW data - track_intentions:', JSON.stringify(intentionsRes.data?.slice(0, 5)));
+    console.log('[Supabase] Join table RAW data - track_soundscapes:', JSON.stringify(soundscapesRes.data?.slice(0, 5)));
+    console.log('[Supabase] Join table RAW data - track_chakras:', JSON.stringify(chakrasRes.data?.slice(0, 5)));
     
-    if (modalitiesRes.error) console.error('[Supabase] track_modalities error:', modalitiesRes.error);
-    if (intentionsRes.error) console.error('[Supabase] track_intentions error:', intentionsRes.error);
-    if (soundscapesRes.error) console.error('[Supabase] track_soundscapes error:', soundscapesRes.error);
-    if (chakrasRes.error) console.error('[Supabase] track_chakras error:', chakrasRes.error);
+    console.log('[Supabase] Join table counts - modalities:', modalitiesRes.data?.length, 'intentions:', intentionsRes.data?.length, 'soundscapes:', soundscapesRes.data?.length, 'chakras:', chakrasRes.data?.length);
+    
+    if (modalitiesRes.error) console.error('[Supabase] track_modalities error:', JSON.stringify(modalitiesRes.error));
+    if (intentionsRes.error) console.error('[Supabase] track_intentions error:', JSON.stringify(intentionsRes.error));
+    if (soundscapesRes.error) console.error('[Supabase] track_soundscapes error:', JSON.stringify(soundscapesRes.error));
+    if (chakrasRes.error) console.error('[Supabase] track_chakras error:', JSON.stringify(chakrasRes.error));
+    
+    const targetTrackModalities = (modalitiesRes.data || []).filter((tm: any) => tm.track_id === '6434f9d9-ee6e-4bd0-b318-d55e44863529');
+    console.log('[Supabase] Target track modalities found:', targetTrackModalities.length, JSON.stringify(targetTrackModalities));
 
     const [allModalities, allIntentions, allSoundscapes, allChakras] = await Promise.all([
       supabase.from('modalities').select('id, name, description, image_url'),
