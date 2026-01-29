@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -93,7 +94,17 @@ export default function AdminScreen() {
 
       {expandedSection === 'upload' && (
         <View style={styles.sectionContent}>
-          <TouchableOpacity style={styles.uploadButton} activeOpacity={0.8}>
+          <TouchableOpacity 
+            style={styles.uploadButton} 
+            activeOpacity={0.8}
+            onPress={() => {
+              Alert.alert(
+                'Upload Track',
+                'Track upload functionality is coming soon. You will be able to upload audio files, add cover art, and tag your tracks with modalities, intentions, and soundscapes.',
+                [{ text: 'OK' }]
+              );
+            }}
+          >
             <Music color={Colors.dark.text} size={28} strokeWidth={1.5} />
             <Text style={styles.uploadButtonText}>Upload New Track</Text>
             <Text style={styles.uploadButtonSubtext}>
