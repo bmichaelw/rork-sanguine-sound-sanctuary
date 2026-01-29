@@ -219,12 +219,27 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
       supabase.from('intensities').select('id, name'),
     ]);
 
+    console.log('[Supabase] Join table data - track_modalities:', modalitiesRes.data?.length, 'rows');
+    console.log('[Supabase] Join table data - track_intentions:', intentionsRes.data?.length, 'rows');
+    console.log('[Supabase] Join table data - track_soundscapes:', soundscapesRes.data?.length, 'rows');
+    console.log('[Supabase] Join table data - track_chakras:', chakrasRes.data?.length, 'rows');
+    
+    if (modalitiesRes.error) console.error('[Supabase] track_modalities error:', modalitiesRes.error);
+    if (intentionsRes.error) console.error('[Supabase] track_intentions error:', intentionsRes.error);
+    if (soundscapesRes.error) console.error('[Supabase] track_soundscapes error:', soundscapesRes.error);
+    if (chakrasRes.error) console.error('[Supabase] track_chakras error:', chakrasRes.error);
+
     const [allModalities, allIntentions, allSoundscapes, allChakras] = await Promise.all([
       supabase.from('modalities').select('id, name, description, image_url'),
       supabase.from('intentions').select('id, name, description'),
       supabase.from('soundscapes').select('id, name, description'),
       supabase.from('chakras').select('id, name, description'),
     ]);
+
+    console.log('[Supabase] Reference tables - modalities:', allModalities.data?.length, 'rows');
+    console.log('[Supabase] Reference tables - intentions:', allIntentions.data?.length, 'rows');
+    console.log('[Supabase] Reference tables - soundscapes:', allSoundscapes.data?.length, 'rows');
+    console.log('[Supabase] Reference tables - chakras:', allChakras.data?.length, 'rows');
 
     const modalitiesMap = new Map((allModalities.data || []).map((m: any) => [m.id, m]));
     const intentionsMap = new Map((allIntentions.data || []).map((i: any) => [i.id, i]));
@@ -293,6 +308,16 @@ export async function fetchTracks(): Promise<SupabaseTrack[]> {
     }));
 
     console.log('[Supabase] Fetched tracks:', transformedTracks.length);
+    if (transformedTracks.length > 0) {
+      const sample = transformedTracks[0];
+      console.log('[Supabase] Sample track data:', {
+        title: sample.title,
+        modalities: sample.modalities?.length || 0,
+        intentions: sample.intentions?.length || 0,
+        soundscapes: sample.soundscapes?.length || 0,
+        chakras: sample.chakras?.length || 0,
+      });
+    }
     return transformedTracks;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : JSON.stringify(err);

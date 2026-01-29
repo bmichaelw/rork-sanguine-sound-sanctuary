@@ -61,6 +61,16 @@ export default function BrowseScreen() {
   };
 
   const filteredTracks = useMemo(() => {
+    console.log('[Browse] allTracks count:', allTracks.length);
+    if (allTracks.length > 0) {
+      console.log('[Browse] Sample track:', {
+        title: allTracks[0].title,
+        modalities: allTracks[0].modalities,
+        intentions: allTracks[0].intentions,
+        soundscapes: allTracks[0].soundscapes,
+        chakras: allTracks[0].chakras,
+      });
+    }
     return allTracks.filter((track: Track) => {
       if (selectedModalityIds.length > 0) {
         const trackModalityIds = track.modalities.map(m => m.id);
@@ -340,8 +350,23 @@ export default function BrowseScreen() {
                       <Text style={styles.listTitle} numberOfLines={1}>{track.title}</Text>
                       <View style={styles.listPills}>
                         {track.modalities.map(m => (
-                          <View key={m.id} style={styles.listPill}>
+                          <View key={`mod-${m.id}`} style={[styles.listPill, styles.listPillModality]}>
                             <Text style={styles.listPillText}>{m.name}</Text>
+                          </View>
+                        ))}
+                        {track.intentions.map(i => (
+                          <View key={`int-${i.id}`} style={[styles.listPill, styles.listPillIntention]}>
+                            <Text style={styles.listPillText}>{i.name}</Text>
+                          </View>
+                        ))}
+                        {track.soundscapes.map(s => (
+                          <View key={`snd-${s.id}`} style={[styles.listPill, styles.listPillSoundscape]}>
+                            <Text style={styles.listPillText}>{s.name}</Text>
+                          </View>
+                        ))}
+                        {track.chakras.map(c => (
+                          <View key={`chk-${c.id}`} style={[styles.listPill, styles.listPillChakra]}>
+                            <Text style={styles.listPillText}>{c.name}</Text>
                           </View>
                         ))}
                         {track.intensity && (
@@ -650,6 +675,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.dark.borderSubtle,
+  },
+  listPillModality: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    borderColor: 'rgba(99, 102, 241, 0.4)',
+  },
+  listPillIntention: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  listPillSoundscape: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  listPillChakra: {
+    backgroundColor: 'rgba(236, 72, 153, 0.15)',
+    borderColor: 'rgba(236, 72, 153, 0.4)',
   },
   listPillIntensity: {
     backgroundColor: Colors.dark.primaryGlow,
