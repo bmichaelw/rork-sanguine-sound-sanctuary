@@ -4,33 +4,22 @@ const supabaseUrl = 'https://dnzrilaojufcvoshtdlw.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuenJpbGFvanVmY3Zvc2h0ZGx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk1MzM5NTYsImV4cCI6MjA4NTEwOTk1Nn0.YDlagGBg3x-aJLfWug29Mge6BAJo1enNNlvIqMv9-Dc';
 
 const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
-  const { signal: _signal, ...restOptions } = options || {};
+  const { signal, ...restOptions } = options || {};
   
-  const doFetch = async (attempt: number): Promise<Response> => {
-    try {
-      const response = await fetch(url, restOptions);
-      return response;
-    } catch (err: any) {
-      const errMsg = err?.message || '';
-      const isAbortError = err?.name === 'AbortError' || 
-        errMsg.toLowerCase().includes('abort') ||
-        errMsg.includes('signal');
-      
-      if (isAbortError) {
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
-          return doFetch(attempt + 1);
-        }
-        return new Response(JSON.stringify({ data: [], error: null }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      throw err;
-    }
-  };
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
   
-  return doFetch(0);
+  try {
+    const response = await fetch(url, {
+      ...restOptions,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
@@ -52,11 +41,12 @@ function isAbortError(err: any): boolean {
     errorMessage.includes('signal');
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 300): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 500): Promise<T> {
   let lastError: any;
   for (let i = 0; i < retries; i++) {
     try {
       if (i > 0) {
+        console.log(`[Supabase] Retry attempt ${i + 1}/${retries}...`);
         await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
       }
       return await fn();
@@ -67,21 +57,16 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 300): Pro
       const isNetworkError = err instanceof TypeError && errorMessage.includes('Failed to fetch');
       const isRetryable = isAbort || isNetworkError;
       
+      console.log(`[Supabase] Attempt ${i + 1} failed:`, errorMessage, 'Retryable:', isRetryable);
+      
       if (i < retries - 1 && isRetryable) {
         continue;
-      }
-      
-      if (isAbort) {
-        return [] as unknown as T;
       }
       
       throw err;
     }
   }
   
-  if (isAbortError(lastError)) {
-    return [] as unknown as T;
-  }
   throw lastError || new Error('Retry failed');
 }
 

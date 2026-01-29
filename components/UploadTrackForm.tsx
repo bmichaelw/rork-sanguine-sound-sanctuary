@@ -80,29 +80,49 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
   const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
   const [imageUrl, setImageUrl] = useState('');
 
-  const { data: modalities = [] } = useQuery<SupabaseModality[]>({
+  const { data: modalities = [], isLoading: loadingModalities } = useQuery<SupabaseModality[]>({
     queryKey: ['modalities'],
     queryFn: fetchModalities,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
   });
 
-  const { data: intentions = [] } = useQuery<SupabaseIntention[]>({
+  const { data: intentions = [], isLoading: loadingIntentions } = useQuery<SupabaseIntention[]>({
     queryKey: ['intentions'],
     queryFn: fetchIntentions,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
   });
 
-  const { data: soundscapes = [] } = useQuery<SupabaseSoundscape[]>({
+  const { data: soundscapes = [], isLoading: loadingSoundscapes } = useQuery<SupabaseSoundscape[]>({
     queryKey: ['soundscapes'],
     queryFn: fetchSoundscapes,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
   });
 
-  const { data: chakras = [] } = useQuery<SupabaseChakra[]>({
+  const { data: chakras = [], isLoading: loadingChakras } = useQuery<SupabaseChakra[]>({
     queryKey: ['chakras'],
     queryFn: fetchChakras,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
   });
 
-  const { data: intensities = [] } = useQuery<SupabaseIntensity[]>({
+  const { data: intensities = [], isLoading: loadingIntensities } = useQuery<SupabaseIntensity[]>({
     queryKey: ['intensities'],
     queryFn: fetchIntensities,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 10,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * (attemptIndex + 1), 3000),
   });
 
   const uploadMutation = useMutation({
@@ -294,7 +314,8 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
     sectionKey: string,
     items: { id: string; name: string }[],
     selected: string[],
-    setSelected: React.Dispatch<React.SetStateAction<string[]>>
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+    isLoading?: boolean
   ) => (
     <View style={styles.section}>
       <TouchableOpacity 
@@ -314,32 +335,41 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       
       {expandedSection === sectionKey && (
         <View style={styles.checkboxGrid}>
-          {items.map(item => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.checkboxItem,
-                selected.includes(item.id) && styles.checkboxItemSelected
-              ]}
-              onPress={() => toggleSelection(item.id, selected, setSelected)}
-              activeOpacity={0.7}
-            >
-              <View style={[
-                styles.checkbox,
-                selected.includes(item.id) && styles.checkboxChecked
-              ]}>
-                {selected.includes(item.id) && (
-                  <Check color={Colors.dark.background} size={12} strokeWidth={3} />
-                )}
-              </View>
-              <Text style={[
-                styles.checkboxLabel,
-                selected.includes(item.id) && styles.checkboxLabelSelected
-              ]}>
-                {item.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={Colors.dark.primary} />
+              <Text style={styles.loadingText}>Loading options...</Text>
+            </View>
+          ) : items.length === 0 ? (
+            <Text style={styles.emptyText}>No options available</Text>
+          ) : (
+            items.map(item => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.checkboxItem,
+                  selected.includes(item.id) && styles.checkboxItemSelected
+                ]}
+                onPress={() => toggleSelection(item.id, selected, setSelected)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.checkbox,
+                  selected.includes(item.id) && styles.checkboxChecked
+                ]}>
+                  {selected.includes(item.id) && (
+                    <Check color={Colors.dark.background} size={12} strokeWidth={3} />
+                  )}
+                </View>
+                <Text style={[
+                  styles.checkboxLabel,
+                  selected.includes(item.id) && styles.checkboxLabelSelected
+                ]}>
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       )}
     </View>
@@ -478,43 +508,52 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
           
           {showIntensityPicker && (
             <View style={styles.dropdownList}>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setIntensityId(null);
-                  setShowIntensityPicker(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>None</Text>
-              </TouchableOpacity>
-              {intensities.map(intensity => (
-                <TouchableOpacity
-                  key={intensity.id}
-                  style={[
-                    styles.dropdownItem,
-                    intensityId === intensity.id && styles.dropdownItemSelected
-                  ]}
-                  onPress={() => {
-                    setIntensityId(intensity.id);
-                    setShowIntensityPicker(false);
-                  }}
-                >
-                  <Text style={[
-                    styles.dropdownItemText,
-                    intensityId === intensity.id && styles.dropdownItemTextSelected
-                  ]}>
-                    {intensity.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {loadingIntensities ? (
+                <View style={styles.dropdownLoading}>
+                  <ActivityIndicator size="small" color={Colors.dark.primary} />
+                  <Text style={styles.loadingText}>Loading...</Text>
+                </View>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.dropdownItem}
+                    onPress={() => {
+                      setIntensityId(null);
+                      setShowIntensityPicker(false);
+                    }}
+                  >
+                    <Text style={styles.dropdownItemText}>None</Text>
+                  </TouchableOpacity>
+                  {intensities.map(intensity => (
+                    <TouchableOpacity
+                      key={intensity.id}
+                      style={[
+                        styles.dropdownItem,
+                        intensityId === intensity.id && styles.dropdownItemSelected
+                      ]}
+                      onPress={() => {
+                        setIntensityId(intensity.id);
+                        setShowIntensityPicker(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText,
+                        intensityId === intensity.id && styles.dropdownItemTextSelected
+                      ]}>
+                        {intensity.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </>
+              )}
             </View>
           )}
         </View>
 
-        {renderMultiSelect('Modalities', 'modalities', modalities, selectedModalities, setSelectedModalities)}
-        {renderMultiSelect('Intentions', 'intentions', intentions, selectedIntentions, setSelectedIntentions)}
-        {renderMultiSelect('Soundscapes', 'soundscapes', soundscapes, selectedSoundscapes, setSelectedSoundscapes)}
-        {renderMultiSelect('Chakras', 'chakras', chakras, selectedChakras, setSelectedChakras)}
+        {renderMultiSelect('Modalities', 'modalities', modalities, selectedModalities, setSelectedModalities, loadingModalities)}
+        {renderMultiSelect('Intentions', 'intentions', intentions, selectedIntentions, setSelectedIntentions, loadingIntentions)}
+        {renderMultiSelect('Soundscapes', 'soundscapes', soundscapes, selectedSoundscapes, setSelectedSoundscapes, loadingSoundscapes)}
+        {renderMultiSelect('Chakras', 'chakras', chakras, selectedChakras, setSelectedChakras, loadingChakras)}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Properties</Text>
@@ -787,6 +826,28 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 15,
     color: Colors.dark.text,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+    padding: 12,
+  },
+  dropdownLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
   },
   footer: {
     height: 40,
