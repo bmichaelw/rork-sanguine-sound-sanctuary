@@ -19,16 +19,19 @@ import {
   Database,
   ChevronRight,
   Clock,
+  TestTube,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useAuth } from '@/providers/AuthProvider';
 import { fetchLibraryStats, LibraryStats } from '@/services/supabase';
 import UploadTrackForm from '@/components/UploadTrackForm';
+import TestUploadPanel from '@/components/TestUploadPanel';
 
 export default function AdminScreen() {
   const { user, isAdmin } = useAuth();
   const [expandedSection, setExpandedSection] = useState<string | null>('stats');
   const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showTestUpload, setShowTestUpload] = useState(false);
   const insets = useSafeAreaInsets();
 
   const handleOpenUploadForm = () => {
@@ -135,6 +138,15 @@ export default function AdminScreen() {
               <Text style={styles.guidelineText}>Add modalities, intentions & soundscapes</Text>
             </View>
           </View>
+
+          <TouchableOpacity 
+            style={styles.testUploadButton} 
+            activeOpacity={0.8}
+            onPress={() => setShowTestUpload(true)}
+          >
+            <TestTube color={Colors.dark.warning} size={20} strokeWidth={1.5} />
+            <Text style={styles.testUploadButtonText}>Test Upload (Debug)</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -266,6 +278,12 @@ export default function AdminScreen() {
               refetch();
             }}
           />
+        </View>
+      )}
+
+      {showTestUpload && (
+        <View style={[styles.fullScreenOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+          <TestUploadPanel onClose={() => setShowTestUpload(false)} />
         </View>
       )}
     </View>
@@ -576,5 +594,20 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: Colors.dark.background,
     zIndex: 1000,
+  },
+  testUploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(237, 137, 54, 0.3)',
+  },
+  testUploadButtonText: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: Colors.dark.warning,
   },
 });
