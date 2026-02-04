@@ -88,6 +88,27 @@ export default function TestUploadPanel({ onClose }: TestUploadPanelProps) {
 
       addLog(`Public URL: ${urlData.publicUrl}`);
 
+      // Verify by listing files in bucket
+      addLog('Verifying upload by listing bucket contents...');
+      const { data: listData, error: listError } = await supabase.storage
+        .from('audio')
+        .list('', { limit: 10, sortBy: { column: 'created_at', order: 'desc' } });
+
+      if (listError) {
+        addLog(`LIST ERROR: ${JSON.stringify(listError, null, 2)}`);
+      } else {
+        addLog(`Files in bucket (${listData?.length || 0}):`);
+        listData?.forEach((file, i) => {
+          addLog(`  ${i + 1}. ${file.name} (${file.metadata?.size || 'unknown'} bytes)`);
+        });
+        const found = listData?.find(f => f.name === fileName);
+        if (found) {
+          addLog(`✓ VERIFIED: File '${fileName}' exists in bucket!`);
+        } else {
+          addLog(`✗ WARNING: File '${fileName}' NOT found in bucket list`);
+        }
+      }
+
     } catch (err: any) {
       addLog(`EXCEPTION: ${err?.message || String(err)}`);
       addLog(`Stack: ${err?.stack || 'no stack'}`);
