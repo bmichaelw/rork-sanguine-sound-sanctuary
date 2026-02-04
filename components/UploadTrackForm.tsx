@@ -80,6 +80,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
   
   const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
   const [imageUrl, setImageUrl] = useState('');
+  const [uploadStatus, setUploadStatus] = useState<string>('');
 
   const { data: modalities = [], isLoading: loadingModalities } = useQuery<SupabaseModality[]>({
     queryKey: ['modalities'],
@@ -135,6 +136,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       if (!duration || isNaN(parseInt(duration))) throw new Error('Valid duration is required');
 
       console.log('[Upload] Starting upload process...');
+      setUploadStatus('Checking authentication...');
       
       const authStatus = await checkAuthStatus();
       console.log('[Upload] Auth status:', authStatus);
@@ -150,13 +152,10 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
 
       let audioBlob: Blob;
       try {
+        setUploadStatus('Reading audio file...');
         console.log('[Upload] Fetching audio file from URI...');
         
-        const controller = new AbortController();
-        const fetchTimeoutId = setTimeout(() => controller.abort(), 30000);
-        
-        const audioResponse = await fetch(audioFile.uri, { signal: controller.signal });
-        clearTimeout(fetchTimeoutId);
+        const audioResponse = await fetch(audioFile.uri);
         
         console.log('[Upload] Audio fetch response status:', audioResponse.status, audioResponse.ok);
         if (!audioResponse.ok) {
@@ -176,6 +175,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         throw new Error('Failed to read audio file. Please try selecting the file again.');
       }
 
+      setUploadStatus('Uploading audio...');
       console.log('[Upload] Uploading audio to storage...');
       let audioUrl: string;
       try {
@@ -195,13 +195,10 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         const imagePath = `covers/${timestamp}_${imageFile!.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         let imageBlob: Blob;
         try {
+          setUploadStatus('Reading image file...');
           console.log('[Upload] Fetching image file from URI...');
           
-          const controller = new AbortController();
-          const fetchTimeoutId = setTimeout(() => controller.abort(), 30000);
-          
-          const imageResponse = await fetch(imageFile!.uri, { signal: controller.signal });
-          clearTimeout(fetchTimeoutId);
+          const imageResponse = await fetch(imageFile!.uri);
           
           console.log('[Upload] Image fetch response status:', imageResponse.status, imageResponse.ok);
           if (!imageResponse.ok) {
@@ -221,6 +218,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
           throw new Error('Failed to read image file. Please try selecting the file again.');
         }
         
+        setUploadStatus('Uploading cover image...');
         console.log('[Upload] Uploading image to storage...');
         try {
           finalImageUrl = await uploadFileToStorage('images', imagePath, imageBlob, imageFile!.mimeType);
@@ -231,6 +229,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         }
       }
 
+      setUploadStatus('Saving track to database...');
       const trackData: UploadTrackData = {
         title: title.trim(),
         duration: parseInt(duration),
@@ -257,9 +256,11 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         throw new Error(`Failed to save track: ${dbError?.message || 'Unknown error'}`);
       }
       
+      setUploadStatus('');
       return track;
     },
     onSuccess: () => {
+      setUploadStatus('');
       queryClient.invalidateQueries({ queryKey: ['tracks'] });
       queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
       Alert.alert('Success', 'Track uploaded successfully!', [
@@ -267,6 +268,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       ]);
     },
     onError: (error) => {
+      setUploadStatus('');
       console.error('[Upload] Error:', error);
       Alert.alert('Upload Failed', error instanceof Error ? error.message : 'An error occurred');
     },
@@ -606,7 +608,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
           {uploadMutation.isPending ? (
             <>
               <ActivityIndicator color={Colors.dark.text} size="small" />
-              <Text style={styles.submitButtonText}>Uploading...</Text>
+              <Text style={styles.submitButtonText}>{uploadStatus || 'Uploading...'}</Text>
             </>
           ) : (
             <>
