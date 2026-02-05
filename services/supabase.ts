@@ -447,7 +447,16 @@ async function uploadWithTimeout<T>(promise: Promise<T>, timeoutMs: number, oper
 
 export async function checkAuthStatus(): Promise<{ authenticated: boolean; userId?: string }> {
   try {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    console.log('[Supabase] Checking auth status...');
+    
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Auth check timeout')), 5000);
+    });
+    
+    const sessionPromise = supabase.auth.getSession();
+    
+    const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as Awaited<typeof sessionPromise>;
+    
     if (error) {
       console.error('[Supabase] Auth check error:', error.message);
       return { authenticated: false };
@@ -458,8 +467,8 @@ export async function checkAuthStatus(): Promise<{ authenticated: boolean; userI
     }
     console.log('[Supabase] No active session');
     return { authenticated: false };
-  } catch (err) {
-    console.error('[Supabase] Auth check exception:', err);
+  } catch (err: any) {
+    console.error('[Supabase] Auth check exception:', err?.message || err);
     return { authenticated: false };
   }
 }
