@@ -41,12 +41,11 @@ interface SelectedFile {
   size?: number;
 }
 
-type IntensityValue = 'gentle' | 'moderate' | 'deep' | 'intense';
+type IntensityValue = 'gentle' | 'moderate' | 'intense';
 
 const INTENSITY_OPTIONS: { value: IntensityValue; label: string }[] = [
   { value: 'gentle', label: 'Gentle' },
   { value: 'moderate', label: 'Moderate' },
-  { value: 'deep', label: 'Deep' },
   { value: 'intense', label: 'Intense' },
 ];
 
@@ -518,15 +517,6 @@ export default function UploadScreen() {
           
           {showIntensityPicker && (
             <View style={styles.dropdownList}>
-              <TouchableOpacity
-                style={styles.dropdownItem}
-                onPress={() => {
-                  setIntensity(null);
-                  setShowIntensityPicker(false);
-                }}
-              >
-                <Text style={styles.dropdownItemText}>None</Text>
-              </TouchableOpacity>
               {INTENSITY_OPTIONS.map(option => (
                 <TouchableOpacity
                   key={option.value}
