@@ -486,8 +486,7 @@ export async function uploadFileToStorage(
     throw new Error('File is empty. Please select a valid file.');
   }
 
-  const authStatus = await checkAuthStatus();
-  console.log('[Supabase] Auth status before upload:', authStatus);
+  console.log('[Supabase] Starting file upload (auth pre-validated by caller)...');
 
   try {
     console.log('[Supabase] Starting upload via SDK...');

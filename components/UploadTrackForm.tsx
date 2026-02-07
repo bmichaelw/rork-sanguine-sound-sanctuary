@@ -139,12 +139,19 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       if (!duration || isNaN(parseInt(duration))) throw new Error('Valid duration is required');
 
       console.log('[Upload] Starting upload process...');
-      setUploadStatus('Checking authentication...');
+      
+      if (!isInitialized) {
+        console.log('[Upload] Auth not initialized yet, waiting...');
+        setUploadStatus('Initializing...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
       
       console.log('[Upload] Auth status from context:', { isAuthenticated, userId: user?.id, isInitialized });
       if (!isAuthenticated || !user) {
         throw new Error('You must be logged in to upload tracks. Please log in and try again.');
       }
+      
+      setUploadStatus('Preparing upload...');
       
       console.log('[Upload] Audio file:', JSON.stringify({ uri: audioFile.uri.substring(0, 100), name: audioFile.name, mimeType: audioFile.mimeType, size: audioFile.size }));
       console.log('[Upload] Platform:', Platform.OS);
