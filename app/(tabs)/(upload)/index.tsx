@@ -1,291 +1,511 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  TextInput,
   TouchableOpacity,
+  Switch,
   ActivityIndicator,
-  RefreshControl,
+  Alert,
+  Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
-import { 
-  Upload, 
-  Music, 
-  Shield, 
-  BarChart3, 
-  TrendingUp, 
-  Database,
-  ChevronRight,
-  Clock,
-  TestTube,
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as DocumentPicker from 'expo-document-picker';
+import {
+  Upload,
+  Music,
+  Check,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useAuth } from '@/providers/AuthProvider';
-import { fetchLibraryStats, LibraryStats } from '@/services/supabase';
-import UploadTrackForm from '@/components/UploadTrackForm';
-import TestUploadPanel from '@/components/TestUploadPanel';
+import {
+  supabase,
+  fetchModalities,
+  fetchIntentions,
+  fetchSoundscapes,
+  fetchChakras,
+  SupabaseModality,
+  SupabaseIntention,
+  SupabaseSoundscape,
+  SupabaseChakra,
+} from '@/services/supabase';
+import { uploadToB2 } from '@/services/backblaze';
 
-export default function AdminScreen() {
-  const { user, isAdmin } = useAuth();
-  const [expandedSection, setExpandedSection] = useState<string | null>('stats');
-  const [showUploadForm, setShowUploadForm] = useState(false);
-  const [showTestUpload, setShowTestUpload] = useState(false);
-  const insets = useSafeAreaInsets();
+interface SelectedFile {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+}
 
-  const handleOpenUploadForm = () => {
-    console.log('[Admin] Upload button pressed, opening form...');
-    setShowUploadForm(true);
-  };
+type IntensityValue = 'gentle' | 'moderate' | 'intense';
 
-  const handleCloseUploadForm = () => {
-    console.log('[Admin] Closing upload form');
-    setShowUploadForm(false);
-  };
+const INTENSITY_OPTIONS: { value: IntensityValue; label: string }[] = [
+  { value: 'gentle', label: 'Gentle' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'intense', label: 'Intense' },
+];
 
-  const { data: stats, isLoading, refetch, isRefetching } = useQuery<LibraryStats>({
-    queryKey: ['libraryStats'],
-    queryFn: fetchLibraryStats,
-    enabled: isAdmin,
+export default function UploadScreen() {
+  const queryClient = useQueryClient();
+  
+  const [title, setTitle] = useState('');
+  const [duration, setDuration] = useState('');
+  const [audioFile, setAudioFile] = useState<SelectedFile | null>(null);
+  const [isSample, setIsSample] = useState(false);
+  const [intensity, setIntensity] = useState<IntensityValue | null>(null);
+  const [selectedModalities, setSelectedModalities] = useState<string[]>([]);
+  const [selectedIntentions, setSelectedIntentions] = useState<string[]>([]);
+  const [selectedSoundscapes, setSelectedSoundscapes] = useState<string[]>([]);
+  const [selectedChakras, setSelectedChakras] = useState<string[]>([]);
+  
+  const [expandedSection, setExpandedSection] = useState<string | null>('modalities');
+  const [showIntensityPicker, setShowIntensityPicker] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
+
+  const { data: modalities = [], isLoading: loadingModalities } = useQuery<SupabaseModality[]>({
+    queryKey: ['modalities'],
+    queryFn: fetchModalities,
   });
 
-  if (!isAdmin) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.accessDenied}>
-          <Shield color={Colors.dark.error} size={64} strokeWidth={1.5} />
-          <Text style={styles.accessDeniedTitle}>Access Denied</Text>
-          <Text style={styles.accessDeniedText}>
-            You don't have permission to access this page.
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  const { data: intentions = [], isLoading: loadingIntentions } = useQuery<SupabaseIntention[]>({
+    queryKey: ['intentions'],
+    queryFn: fetchIntentions,
+  });
 
-  const toggleSection = (section: string) => {
-    setExpandedSection(expandedSection === section ? null : section);
-  };
+  const { data: soundscapes = [], isLoading: loadingSoundscapes } = useQuery<SupabaseSoundscape[]>({
+    queryKey: ['soundscapes'],
+    queryFn: fetchSoundscapes,
+  });
 
-  return (
-    <View style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={Colors.dark.primary}
-          />
+  const { data: chakras = [], isLoading: loadingChakras } = useQuery<SupabaseChakra[]>({
+    queryKey: ['chakras'],
+    queryFn: fetchChakras,
+  });
+
+  const resetForm = useCallback(() => {
+    setTitle('');
+    setDuration('');
+    setAudioFile(null);
+    setIsSample(false);
+    setIntensity(null);
+    setSelectedModalities([]);
+    setSelectedIntentions([]);
+    setSelectedSoundscapes([]);
+    setSelectedChakras([]);
+    setUploadStatus('');
+  }, []);
+
+  const uploadMutation = useMutation({
+    mutationFn: async () => {
+      console.log('[Upload] Starting upload process...');
+      
+      if (!title.trim()) {
+        throw new Error('Title is required');
+      }
+      if (!audioFile) {
+        throw new Error('Audio file is required');
+      }
+      if (!duration.trim()) {
+        throw new Error('Duration is required (format: MM:SS)');
+      }
+
+      setUploadStatus('Reading audio file...');
+      console.log('[Upload] Audio file:', { name: audioFile.name, uri: audioFile.uri.substring(0, 50), mimeType: audioFile.mimeType });
+
+      let audioBlob: Blob;
+      try {
+        console.log('[Upload] Fetching audio file from URI...');
+        const audioResponse = await fetch(audioFile.uri);
+        if (!audioResponse.ok) {
+          throw new Error(`Failed to read audio file: ${audioResponse.status}`);
         }
-      >
-      <View style={styles.header}>
-        <View style={styles.adminBadgeHeader}>
-          <Shield color={Colors.dark.success} size={16} />
-          <Text style={styles.adminBadgeHeaderText}>Admin</Text>
-        </View>
-        <Text style={styles.welcomeText}>Welcome back,</Text>
-        <Text style={styles.emailText}>{user?.email}</Text>
-      </View>
+        audioBlob = await audioResponse.blob();
+        console.log('[Upload] Audio blob created, size:', audioBlob.size);
+        
+        if (audioBlob.size === 0) {
+          throw new Error('Audio file is empty');
+        }
+      } catch (err: any) {
+        console.error('[Upload] Error reading audio file:', err?.message);
+        throw new Error('Failed to read audio file. Please try again.');
+      }
 
-      {/* Upload Track Section */}
-      <TouchableOpacity
-        style={styles.sectionHeader}
-        onPress={() => toggleSection('upload')}
+      setUploadStatus('Uploading to Backblaze B2...');
+      console.log('[Upload] Uploading to B2...');
+      
+      let fileUrl: string;
+      try {
+        fileUrl = await uploadToB2(
+          audioBlob,
+          audioFile.name,
+          audioFile.mimeType,
+          (progress) => {
+            if (progress < 30) {
+              setUploadStatus('Preparing upload...');
+            } else if (progress < 90) {
+              setUploadStatus(`Uploading... ${progress}%`);
+            } else {
+              setUploadStatus('Finalizing upload...');
+            }
+          }
+        );
+        console.log('[Upload] B2 upload successful:', fileUrl);
+      } catch (err: any) {
+        console.error('[Upload] B2 upload failed:', err?.message);
+        throw new Error(err?.message || 'Failed to upload audio file');
+      }
+
+      setUploadStatus('Creating track in database...');
+      console.log('[Upload] Creating track record...');
+
+      const { data: track, error: trackError } = await supabase
+        .from('tracks')
+        .insert({
+          title: title.trim(),
+          artist_id: 1,
+          file_url: fileUrl,
+          duration: duration.trim(),
+          is_sample: isSample,
+          intensity: intensity,
+        })
+        .select()
+        .single();
+
+      if (trackError) {
+        console.error('[Upload] Track insert error:', trackError);
+        throw new Error(`Failed to create track: ${trackError.message}`);
+      }
+
+      console.log('[Upload] Track created with ID:', track.id);
+
+      setUploadStatus('Saving metadata...');
+      console.log('[Upload] Saving join table entries...');
+
+      const joinPromises: Promise<any>[] = [];
+
+      if (selectedModalities.length > 0) {
+        console.log('[Upload] Adding modalities:', selectedModalities);
+        const modalityRows = selectedModalities.map(id => ({
+          track_id: track.id,
+          modality_id: id,
+        }));
+        joinPromises.push(
+          (async () => {
+            const { error } = await supabase.from('track_modalities').insert(modalityRows);
+            if (error) console.error('[Upload] track_modalities error:', error);
+          })()
+        );
+      }
+
+      if (selectedIntentions.length > 0) {
+        console.log('[Upload] Adding intentions:', selectedIntentions);
+        const intentionRows = selectedIntentions.map(id => ({
+          track_id: track.id,
+          intention_id: id,
+        }));
+        joinPromises.push(
+          (async () => {
+            const { error } = await supabase.from('track_intentions').insert(intentionRows);
+            if (error) console.error('[Upload] track_intentions error:', error);
+          })()
+        );
+      }
+
+      if (selectedSoundscapes.length > 0) {
+        console.log('[Upload] Adding soundscapes:', selectedSoundscapes);
+        const soundscapeRows = selectedSoundscapes.map(id => ({
+          track_id: track.id,
+          soundscape_id: id,
+        }));
+        joinPromises.push(
+          (async () => {
+            const { error } = await supabase.from('track_soundscapes').insert(soundscapeRows);
+            if (error) console.error('[Upload] track_soundscapes error:', error);
+          })()
+        );
+      }
+
+      if (selectedChakras.length > 0) {
+        console.log('[Upload] Adding chakras:', selectedChakras);
+        const chakraRows = selectedChakras.map(id => ({
+          track_id: track.id,
+          chakra_id: id,
+        }));
+        joinPromises.push(
+          (async () => {
+            const { error } = await supabase.from('track_chakras').insert(chakraRows);
+            if (error) console.error('[Upload] track_chakras error:', error);
+          })()
+        );
+      }
+
+      await Promise.all(joinPromises);
+      console.log('[Upload] All join tables updated successfully');
+
+      return track;
+    },
+    onSuccess: (track) => {
+      console.log('[Upload] Upload complete!', track.id);
+      setUploadStatus('');
+      queryClient.invalidateQueries({ queryKey: ['tracks'] });
+      queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
+      Alert.alert('Success', 'Track uploaded successfully!', [
+        { text: 'OK', onPress: resetForm }
+      ]);
+    },
+    onError: (error: any) => {
+      console.error('[Upload] Error:', error?.message);
+      setUploadStatus('');
+      Alert.alert('Upload Failed', error?.message || 'An error occurred');
+    },
+  });
+
+  const pickAudioFile = useCallback(async () => {
+    console.log('[Upload] Opening file picker...');
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        console.log('[Upload] File selected:', asset.name, 'size:', asset.size);
+        setAudioFile({
+          uri: asset.uri,
+          name: asset.name,
+          mimeType: asset.mimeType || 'audio/mpeg',
+          size: asset.size,
+        });
+      } else {
+        console.log('[Upload] File picker cancelled');
+      }
+    } catch (error: any) {
+      console.error('[Upload] File picker error:', error?.message);
+      Alert.alert('Error', 'Failed to select audio file');
+    }
+  }, []);
+
+  const toggleSelection = useCallback((
+    id: string,
+    selected: string[],
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>
+  ) => {
+    setSelected(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  }, []);
+
+  const toggleSection = useCallback((section: string) => {
+    setExpandedSection(prev => prev === section ? null : section);
+  }, []);
+
+  const renderMultiSelect = (
+    sectionTitle: string,
+    sectionKey: string,
+    items: { id: string; name: string }[],
+    selected: string[],
+    setSelected: React.Dispatch<React.SetStateAction<string[]>>,
+    isLoading?: boolean
+  ) => (
+    <View style={styles.section}>
+      <TouchableOpacity 
+        style={styles.sectionHeader} 
+        onPress={() => toggleSection(sectionKey)}
         activeOpacity={0.7}
       >
-        <View style={styles.sectionHeaderLeft}>
-          <View style={[styles.sectionIcon, { backgroundColor: 'rgba(99, 179, 237, 0.15)' }]}>
-            <Upload color="#63B3ED" size={20} strokeWidth={1.5} />
-          </View>
-          <Text style={styles.sectionTitle}>Upload Track</Text>
-        </View>
-        <ChevronRight 
-          color={Colors.dark.textMuted} 
-          size={20} 
-          style={{ transform: [{ rotate: expandedSection === 'upload' ? '90deg' : '0deg' }] }}
-        />
+        <Text style={styles.sectionTitle}>
+          {sectionTitle} {selected.length > 0 && `(${selected.length})`}
+        </Text>
+        {expandedSection === sectionKey ? (
+          <ChevronUp color={Colors.dark.textMuted} size={20} />
+        ) : (
+          <ChevronDown color={Colors.dark.textMuted} size={20} />
+        )}
       </TouchableOpacity>
-
-      {expandedSection === 'upload' && (
-        <View style={styles.sectionContent}>
-          <TouchableOpacity 
-            style={styles.uploadButton} 
-            activeOpacity={0.8}
-            onPress={handleOpenUploadForm}
-          >
-            <Music color={Colors.dark.text} size={28} strokeWidth={1.5} />
-            <Text style={styles.uploadButtonText}>Upload New Track</Text>
-            <Text style={styles.uploadButtonSubtext}>
-              Add a new meditation track to the library
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.guidelinesCard}>
-            <Text style={styles.guidelinesTitle}>Upload Guidelines</Text>
-            <View style={styles.guidelineItem}>
-              <View style={styles.guidelineDot} />
-              <Text style={styles.guidelineText}>Audio: MP3 or M4A format</Text>
-            </View>
-            <View style={styles.guidelineItem}>
-              <View style={styles.guidelineDot} />
-              <Text style={styles.guidelineText}>Cover art: 1:1 ratio, min 500x500px</Text>
-            </View>
-            <View style={styles.guidelineItem}>
-              <View style={styles.guidelineDot} />
-              <Text style={styles.guidelineText}>Add modalities, intentions & soundscapes</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity 
-            style={styles.testUploadButton} 
-            activeOpacity={0.8}
-            onPress={() => setShowTestUpload(true)}
-          >
-            <TestTube color={Colors.dark.warning} size={20} strokeWidth={1.5} />
-            <Text style={styles.testUploadButtonText}>Test Upload (Debug)</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Library Stats Section */}
-      <TouchableOpacity
-        style={styles.sectionHeader}
-        onPress={() => toggleSection('stats')}
-        activeOpacity={0.7}
-      >
-        <View style={styles.sectionHeaderLeft}>
-          <View style={[styles.sectionIcon, { backgroundColor: 'rgba(126, 200, 139, 0.15)' }]}>
-            <Database color={Colors.dark.success} size={20} strokeWidth={1.5} />
-          </View>
-          <Text style={styles.sectionTitle}>Library Stats</Text>
-        </View>
-        <ChevronRight 
-          color={Colors.dark.textMuted} 
-          size={20} 
-          style={{ transform: [{ rotate: expandedSection === 'stats' ? '90deg' : '0deg' }] }}
-        />
-      </TouchableOpacity>
-
-      {expandedSection === 'stats' && (
-        <View style={styles.sectionContent}>
+      
+      {expandedSection === sectionKey && (
+        <View style={styles.checkboxGrid}>
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color={Colors.dark.primary} size="small" />
-              <Text style={styles.loadingText}>Loading stats...</Text>
+              <ActivityIndicator size="small" color={Colors.dark.primary} />
+              <Text style={styles.loadingText}>Loading...</Text>
             </View>
-          ) : stats ? (
-            <>
-              <View style={styles.totalTracksCard}>
-                <View style={styles.totalTracksIconContainer}>
-                  <Music color={Colors.dark.primary} size={24} strokeWidth={1.5} />
-                </View>
-                <View style={styles.totalTracksInfo}>
-                  <Text style={styles.totalTracksLabel}>Total Tracks</Text>
-                  <Text style={styles.totalTracksValue}>{stats.totalTracks}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.modalityStatsTitle}>Tracks by Modality</Text>
-              <View style={styles.modalityList}>
-                {stats.tracksPerModality.map((modality, index) => (
-                  <View key={modality.name} style={styles.modalityItem}>
-                    <View style={styles.modalityRank}>
-                      <Text style={styles.modalityRankText}>{index + 1}</Text>
-                    </View>
-                    <Text style={styles.modalityName}>{modality.name}</Text>
-                    <View style={styles.modalityCountBadge}>
-                      <Text style={styles.modalityCount}>{modality.count}</Text>
-                    </View>
-                  </View>
-                ))}
-                {stats.tracksPerModality.length === 0 && (
-                  <Text style={styles.emptyText}>No modalities found</Text>
-                )}
-              </View>
-            </>
+          ) : items.length === 0 ? (
+            <Text style={styles.emptyText}>No options available</Text>
           ) : (
-            <Text style={styles.errorText}>Failed to load stats</Text>
+            items.map(item => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.checkboxItem,
+                  selected.includes(item.id) && styles.checkboxItemSelected
+                ]}
+                onPress={() => toggleSelection(item.id, selected, setSelected)}
+                activeOpacity={0.7}
+              >
+                <View style={[
+                  styles.checkbox,
+                  selected.includes(item.id) && styles.checkboxChecked
+                ]}>
+                  {selected.includes(item.id) && (
+                    <Check color={Colors.dark.background} size={12} strokeWidth={3} />
+                  )}
+                </View>
+                <Text style={[
+                  styles.checkboxLabel,
+                  selected.includes(item.id) && styles.checkboxLabelSelected
+                ]}>
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            ))
           )}
         </View>
       )}
+    </View>
+  );
 
-      {/* Analytics Section */}
-      <TouchableOpacity
-        style={styles.sectionHeader}
-        onPress={() => toggleSection('analytics')}
-        activeOpacity={0.7}
-      >
-        <View style={styles.sectionHeaderLeft}>
-          <View style={[styles.sectionIcon, { backgroundColor: 'rgba(237, 137, 54, 0.15)' }]}>
-            <BarChart3 color="#ED8936" size={20} strokeWidth={1.5} />
-          </View>
-          <Text style={styles.sectionTitle}>Analytics</Text>
+  return (
+    <View style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Upload Track</Text>
+          <Text style={styles.headerSubtitle}>Add a new meditation track to the library</Text>
         </View>
-        <ChevronRight 
-          color={Colors.dark.textMuted} 
-          size={20} 
-          style={{ transform: [{ rotate: expandedSection === 'analytics' ? '90deg' : '0deg' }] }}
-        />
-      </TouchableOpacity>
 
-      {expandedSection === 'analytics' && (
-        <View style={styles.sectionContent}>
-          <View style={styles.comingSoonCard}>
-            <View style={styles.comingSoonIconContainer}>
-              <TrendingUp color={Colors.dark.textMuted} size={32} strokeWidth={1.5} />
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Title *</Text>
+          <TextInput
+            style={styles.textInput}
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Enter track title"
+            placeholderTextColor={Colors.dark.textMuted}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Audio File *</Text>
+          <TouchableOpacity style={styles.filePicker} onPress={pickAudioFile} activeOpacity={0.7}>
+            <Music color={audioFile ? Colors.dark.primary : Colors.dark.textMuted} size={24} />
+            <View style={styles.filePickerContent}>
+              <Text style={[styles.filePickerText, audioFile && styles.filePickerTextSelected]}>
+                {audioFile ? audioFile.name : 'Select audio file (.mp3 or .m4a)'}
+              </Text>
+              {audioFile?.size && (
+                <Text style={styles.fileSizeText}>
+                  {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
+                </Text>
+              )}
             </View>
-            <Text style={styles.comingSoonTitle}>Coming Soon</Text>
-            <Text style={styles.comingSoonText}>
-              Analytics dashboard with play counts, user engagement metrics, and listening trends will be available in a future update.
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Duration * (MM:SS)</Text>
+          <TextInput
+            style={styles.textInput}
+            value={duration}
+            onChangeText={setDuration}
+            placeholder="e.g. 12:34"
+            placeholderTextColor={Colors.dark.textMuted}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Is Sample</Text>
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleLabel}>This track is a sample/preview</Text>
+            <Switch
+              value={isSample}
+              onValueChange={setIsSample}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Intensity</Text>
+          <TouchableOpacity 
+            style={styles.dropdown} 
+            onPress={() => setShowIntensityPicker(!showIntensityPicker)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.dropdownText, !intensity && styles.dropdownPlaceholder]}>
+              {intensity ? INTENSITY_OPTIONS.find(o => o.value === intensity)?.label : 'Select intensity'}
             </Text>
-            
-            <View style={styles.plannedFeatures}>
-              <Text style={styles.plannedFeaturesTitle}>Planned Features</Text>
-              <View style={styles.plannedFeatureItem}>
-                <Clock color={Colors.dark.textMuted} size={14} />
-                <Text style={styles.plannedFeatureText}>Total play counts per track</Text>
-              </View>
-              <View style={styles.plannedFeatureItem}>
-                <Clock color={Colors.dark.textMuted} size={14} />
-                <Text style={styles.plannedFeatureText}>User engagement metrics</Text>
-              </View>
-              <View style={styles.plannedFeatureItem}>
-                <Clock color={Colors.dark.textMuted} size={14} />
-                <Text style={styles.plannedFeatureText}>Popular listening times</Text>
-              </View>
-              <View style={styles.plannedFeatureItem}>
-                <Clock color={Colors.dark.textMuted} size={14} />
-                <Text style={styles.plannedFeatureText}>Completion rates by track</Text>
-              </View>
+            <ChevronDown color={Colors.dark.textMuted} size={20} />
+          </TouchableOpacity>
+          
+          {showIntensityPicker && (
+            <View style={styles.dropdownList}>
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setIntensity(null);
+                  setShowIntensityPicker(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>None</Text>
+              </TouchableOpacity>
+              {INTENSITY_OPTIONS.map(option => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.dropdownItem,
+                    intensity === option.value && styles.dropdownItemSelected
+                  ]}
+                  onPress={() => {
+                    setIntensity(option.value);
+                    setShowIntensityPicker(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.dropdownItemText,
+                    intensity === option.value && styles.dropdownItemTextSelected
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          </View>
+          )}
         </View>
-      )}
+
+        {renderMultiSelect('Modalities', 'modalities', modalities, selectedModalities, setSelectedModalities, loadingModalities)}
+        {renderMultiSelect('Intentions', 'intentions', intentions, selectedIntentions, setSelectedIntentions, loadingIntentions)}
+        {renderMultiSelect('Soundscapes', 'soundscapes', soundscapes, selectedSoundscapes, setSelectedSoundscapes, loadingSoundscapes)}
+        {renderMultiSelect('Chakras', 'chakras', chakras, selectedChakras, setSelectedChakras, loadingChakras)}
 
         <View style={styles.footer} />
       </ScrollView>
 
-      {showUploadForm && (
-        <View style={[styles.fullScreenOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-          <UploadTrackForm
-            onClose={handleCloseUploadForm}
-            onSuccess={() => {
-              console.log('[Admin] Upload success, closing form');
-              handleCloseUploadForm();
-              refetch();
-            }}
-          />
-        </View>
-      )}
-
-      {showTestUpload && (
-        <View style={[styles.fullScreenOverlay, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-          <TestUploadPanel onClose={() => setShowTestUpload(false)} />
-        </View>
-      )}
+      <View style={styles.submitContainer}>
+        <TouchableOpacity
+          style={[styles.submitButton, uploadMutation.isPending && styles.submitButtonDisabled]}
+          onPress={() => uploadMutation.mutate()}
+          disabled={uploadMutation.isPending}
+          activeOpacity={0.8}
+        >
+          {uploadMutation.isPending ? (
+            <>
+              <ActivityIndicator color={Colors.dark.text} size="small" />
+              <Text style={styles.submitButtonText}>{uploadStatus || 'Uploading...'}</Text>
+            </>
+          ) : (
+            <>
+              <Upload color={Colors.dark.text} size={20} />
+              <Text style={styles.submitButtonText}>Upload Track</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -298,316 +518,222 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  content: {
+  scrollContent: {
     padding: 20,
-    paddingBottom: 40,
   },
   header: {
     marginBottom: 24,
-    paddingTop: 8,
   },
-  adminBadgeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(126, 200, 139, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    gap: 5,
-    marginBottom: 12,
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700' as const,
+    color: Colors.dark.text,
+    marginBottom: 4,
   },
-  adminBadgeHeaderText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.dark.success,
-  },
-  welcomeText: {
+  headerSubtitle: {
     fontSize: 14,
     color: Colors.dark.textMuted,
-    marginBottom: 2,
   },
-  emailText: {
-    fontSize: 18,
-    fontWeight: '600',
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: Colors.dark.textSecondary,
+    marginBottom: 8,
+  },
+  textInput: {
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
     color: Colors.dark.text,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  filePicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 2,
+    borderColor: Colors.dark.border,
+    borderStyle: 'dashed',
+  },
+  filePickerContent: {
+    flex: 1,
+  },
+  filePickerText: {
+    fontSize: 14,
+    color: Colors.dark.textMuted,
+  },
+  filePickerTextSelected: {
+    color: Colors.dark.text,
+  },
+  fileSizeText: {
+    fontSize: 12,
+    color: Colors.dark.textMuted,
+    marginTop: 2,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    color: Colors.dark.text,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  dropdownText: {
+    fontSize: 16,
+    color: Colors.dark.text,
+  },
+  dropdownPlaceholder: {
+    color: Colors.dark.textMuted,
+  },
+  dropdownList: {
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderRadius: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.dark.border,
+  },
+  dropdownItemSelected: {
+    backgroundColor: Colors.dark.primaryGlow,
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    color: Colors.dark.text,
+  },
+  dropdownItemTextSelected: {
+    color: Colors.dark.primary,
+    fontWeight: '500' as const,
+  },
+  section: {
+    marginBottom: 20,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     backgroundColor: Colors.dark.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 2,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.dark.border,
   },
-  sectionHeaderLeft: {
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.dark.text,
+  },
+  checkboxGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  checkboxItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
   },
-  sectionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+  checkboxItemSelected: {
+    backgroundColor: Colors.dark.primaryGlow,
+    borderColor: Colors.dark.primary,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: Colors.dark.textMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.text,
-  },
-  sectionContent: {
-    backgroundColor: Colors.dark.surfaceElevated,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-    borderTopWidth: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-  },
-  uploadButton: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: Colors.dark.border,
-    borderStyle: 'dashed',
-    marginBottom: 16,
-  },
-  uploadButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.text,
-    marginTop: 12,
-  },
-  uploadButtonSubtext: {
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    marginTop: 4,
-  },
-  guidelinesCard: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 10,
-    padding: 14,
-  },
-  guidelinesTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.dark.textSecondary,
-    marginBottom: 10,
-  },
-  guidelineItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  guidelineDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+  checkboxChecked: {
     backgroundColor: Colors.dark.primary,
-    marginRight: 10,
+    borderColor: Colors.dark.primary,
   },
-  guidelineText: {
+  checkboxLabel: {
     fontSize: 13,
     color: Colors.dark.textSecondary,
+  },
+  checkboxLabelSelected: {
+    color: Colors.dark.text,
+    fontWeight: '500' as const,
   },
   loadingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 24,
-    gap: 10,
+    gap: 8,
+    padding: 12,
   },
   loadingText: {
     fontSize: 14,
     color: Colors.dark.textMuted,
   },
-  totalTracksCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    gap: 14,
-  },
-  totalTracksIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
-    backgroundColor: Colors.dark.primaryGlow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  totalTracksInfo: {
-    flex: 1,
-  },
-  totalTracksLabel: {
-    fontSize: 13,
-    color: Colors.dark.textMuted,
-    marginBottom: 2,
-  },
-  totalTracksValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: Colors.dark.text,
-  },
-  modalityStatsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.dark.textSecondary,
-    marginBottom: 12,
-  },
-  modalityList: {
-    gap: 8,
-  },
-  modalityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 10,
-    padding: 12,
-  },
-  modalityRank: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: Colors.dark.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  modalityRankText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.dark.textMuted,
-  },
-  modalityName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.dark.text,
-  },
-  modalityCountBadge: {
-    backgroundColor: Colors.dark.primaryGlow,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  modalityCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.dark.primary,
-  },
   emptyText: {
     fontSize: 14,
     color: Colors.dark.textMuted,
-    textAlign: 'center',
-    padding: 16,
+    padding: 12,
   },
-  errorText: {
-    fontSize: 14,
-    color: Colors.dark.error,
-    textAlign: 'center',
-    padding: 16,
+  footer: {
+    height: 40,
   },
-  comingSoonCard: {
-    alignItems: 'center',
+  submitContainer: {
     padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    borderTopWidth: 1,
+    borderTopColor: Colors.dark.border,
+    backgroundColor: Colors.dark.background,
   },
-  comingSoonIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: Colors.dark.surface,
+  submitButton: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-  },
-  comingSoonTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.dark.text,
-    marginBottom: 8,
-  },
-  comingSoonText: {
-    fontSize: 14,
-    color: Colors.dark.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
-  },
-  plannedFeatures: {
-    width: '100%',
-    backgroundColor: Colors.dark.surface,
+    gap: 10,
+    backgroundColor: Colors.dark.primary,
     borderRadius: 12,
     padding: 16,
   },
-  plannedFeaturesTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.dark.textMuted,
-    marginBottom: 12,
+  submitButtonDisabled: {
+    opacity: 0.6,
   },
-  plannedFeatureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  plannedFeatureText: {
-    fontSize: 13,
-    color: Colors.dark.textSecondary,
-  },
-  accessDenied: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  accessDeniedTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
     color: Colors.dark.text,
-    marginTop: 20,
-    marginBottom: 8,
-  },
-  accessDeniedText: {
-    fontSize: 15,
-    color: Colors.dark.textSecondary,
-    textAlign: 'center',
-  },
-  footer: {
-    height: 20,
-  },
-  fullScreenOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.dark.background,
-    zIndex: 1000,
-  },
-  testUploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 10,
-    padding: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(237, 137, 54, 0.3)',
-  },
-  testUploadButtonText: {
-    fontSize: 14,
-    fontWeight: '500' as const,
-    color: Colors.dark.warning,
   },
 });
