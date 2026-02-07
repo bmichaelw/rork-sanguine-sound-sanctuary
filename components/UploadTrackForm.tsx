@@ -42,6 +42,7 @@ import {
   SupabaseChakra,
   SupabaseIntensity,
 } from '@/services/supabase';
+import { uploadToB2 } from '@/services/backblaze';
 
 interface UploadTrackFormProps {
   onClose: () => void;
@@ -81,6 +82,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
   const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
   const [imageUrl, setImageUrl] = useState('');
   const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const { data: modalities = [], isLoading: loadingModalities } = useQuery<SupabaseModality[]>({
     queryKey: ['modalities'],
@@ -175,14 +177,28 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
         throw new Error('Failed to read audio file. Please try selecting the file again.');
       }
 
-      setUploadStatus('Uploading audio...');
-      console.log('[Upload] Uploading audio to storage...');
+      setUploadStatus('Uploading audio to B2...');
+      console.log('[Upload] Uploading audio to Backblaze B2...');
       let audioUrl: string;
       try {
-        audioUrl = await uploadFileToStorage('audio', audioPath, audioBlob, audioFile.mimeType);
-        console.log('[Upload] Audio uploaded successfully:', audioUrl);
+        audioUrl = await uploadToB2(
+          audioBlob,
+          audioFile.name,
+          audioFile.mimeType,
+          (progress) => {
+            setUploadProgress(progress);
+            if (progress < 25) {
+              setUploadStatus('Preparing upload...');
+            } else if (progress < 90) {
+              setUploadStatus(`Uploading audio... ${progress}%`);
+            } else {
+              setUploadStatus('Finalizing upload...');
+            }
+          }
+        );
+        console.log('[Upload] Audio uploaded successfully to B2:', audioUrl);
       } catch (uploadError: any) {
-        console.error('[Upload] Audio upload failed:', uploadError?.message || uploadError);
+        console.error('[Upload] Audio upload to B2 failed:', uploadError?.message || uploadError);
         throw new Error(uploadError?.message || 'Audio upload failed');
       }
       
@@ -257,10 +273,12 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       }
       
       setUploadStatus('');
+      setUploadProgress(0);
       return track;
     },
     onSuccess: () => {
       setUploadStatus('');
+      setUploadProgress(0);
       queryClient.invalidateQueries({ queryKey: ['tracks'] });
       queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
       Alert.alert('Success', 'Track uploaded successfully!', [
@@ -269,6 +287,7 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
     },
     onError: (error) => {
       setUploadStatus('');
+      setUploadProgress(0);
       console.error('[Upload] Error:', error);
       Alert.alert('Upload Failed', error instanceof Error ? error.message : 'An error occurred');
     },
