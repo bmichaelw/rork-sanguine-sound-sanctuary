@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { AudioProvider } from "@/providers/AudioProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { trpc, trpcClient } from "@/lib/trpc";
 import Colors from "@/constants/colors";
 
 SplashScreen.preventAutoHideAsync();
@@ -48,15 +49,17 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AudioProvider>
-          <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.dark.background }}>
-            <StatusBar style="light" />
-            <RootLayoutNav />
-          </GestureHandlerRootView>
-        </AudioProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AudioProvider>
+            <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.dark.background }}>
+              <StatusBar style="light" />
+              <RootLayoutNav />
+            </GestureHandlerRootView>
+          </AudioProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </trpc.Provider>
   );
 }
