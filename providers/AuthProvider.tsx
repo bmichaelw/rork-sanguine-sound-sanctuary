@@ -1,8 +1,13 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useCallback } from 'react';
+import { Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-linking';
 import { supabase } from '@/services/supabase';
 import type { User, Session } from '@supabase/supabase-js';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface AuthState {
   user: User | null;
@@ -140,6 +145,70 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     },
   });
 
+  const signInWithGoogleMutation = useMutation({
+    mutationFn: async () => {
+      console.log('[Auth] Starting Google sign in...');
+      
+      const redirectUrl = makeRedirectUri({
+        scheme: 'com.anonymous.expo-app',
+        path: 'auth/callback',
+      });
+      
+      console.log('[Auth] OAuth redirect URL:', redirectUrl);
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: Platform.OS !== 'web',
+        },
+      });
+
+      if (error) {
+        console.error('[Auth] Google sign in error:', error.message);
+        throw error;
+      }
+
+      if (Platform.OS !== 'web' && data?.url) {
+        console.log('[Auth] Opening OAuth URL...');
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        if (result.type === 'success' && result.url) {
+          console.log('[Auth] OAuth callback received');
+          const url = new URL(result.url);
+          const access_token = url.searchParams.get('access_token');
+          const refresh_token = url.searchParams.get('refresh_token');
+
+          if (access_token && refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token,
+              refresh_token,
+            });
+
+            if (sessionError) {
+              console.error('[Auth] Error setting session:', sessionError.message);
+              throw sessionError;
+            }
+
+            console.log('[Auth] Google sign in successful');
+          } else {
+            throw new Error('No access token received from OAuth');
+          }
+        } else if (result.type === 'cancel') {
+          throw new Error('Google sign in cancelled');
+        } else {
+          throw new Error('Google sign in failed');
+        }
+      }
+
+      console.log('[Auth] Google sign in successful (web)');
+      return data;
+    },
+  });
+
   const signUp = useCallback(async (email: string, password: string) => {
     return signUpMutation.mutateAsync({ email, password });
   }, [signUpMutation.mutateAsync]);
@@ -147,6 +216,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const signIn = useCallback(async (email: string, password: string) => {
     return signInMutation.mutateAsync({ email, password });
   }, [signInMutation.mutateAsync]);
+
+  const signInWithGoogle = useCallback(async () => {
+    return signInWithGoogleMutation.mutateAsync();
+  }, [signInWithGoogleMutation.mutateAsync]);
 
   const signOut = useCallback(async () => {
     return signOutMutation.mutateAsync();
@@ -156,13 +229,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     user: authState.user,
     session: authState.session,
     isAdmin: authState.isAdmin,
-    isLoading: authState.isLoading || signInMutation.isPending || signUpMutation.isPending,
+    isLoading: authState.isLoading || signInMutation.isPending || signUpMutation.isPending || signInWithGoogleMutation.isPending,
     isInitialized: authState.isInitialized,
     isAuthenticated: !!authState.session,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     signUpError: signUpMutation.error,
     signInError: signInMutation.error,
+    googleSignInError: signInWithGoogleMutation.error,
   };
 });
