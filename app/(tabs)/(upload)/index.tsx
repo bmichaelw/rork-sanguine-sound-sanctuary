@@ -41,11 +41,12 @@ interface SelectedFile {
   size?: number;
 }
 
-type IntensityValue = 'gentle' | 'moderate' | 'intense';
+type IntensityValue = 'gentle' | 'moderate' | 'deep' | 'intense';
 
 const INTENSITY_OPTIONS: { value: IntensityValue; label: string }[] = [
   { value: 'gentle', label: 'Gentle' },
   { value: 'moderate', label: 'Moderate' },
+  { value: 'deep', label: 'Deep' },
   { value: 'intense', label: 'Intense' },
 ];
 
@@ -57,6 +58,12 @@ export default function UploadScreen() {
   const [audioFile, setAudioFile] = useState<SelectedFile | null>(null);
   const [isSample, setIsSample] = useState(false);
   const [intensity, setIntensity] = useState<IntensityValue | null>(null);
+  const [words, setWords] = useState(false);
+  const [voice, setVoice] = useState(false);
+  const [sleepSafe, setSleepSafe] = useState(false);
+  const [tripSafe, setTripSafe] = useState(false);
+  const [channeled, setChanneled] = useState(false);
+  const [containsDissonance, setContainsDissonance] = useState(false);
   const [selectedModalities, setSelectedModalities] = useState<string[]>([]);
   const [selectedIntentions, setSelectedIntentions] = useState<string[]>([]);
   const [selectedSoundscapes, setSelectedSoundscapes] = useState<string[]>([]);
@@ -92,6 +99,12 @@ export default function UploadScreen() {
     setAudioFile(null);
     setIsSample(false);
     setIntensity(null);
+    setWords(false);
+    setVoice(false);
+    setSleepSafe(false);
+    setTripSafe(false);
+    setChanneled(false);
+    setContainsDissonance(false);
     setSelectedModalities([]);
     setSelectedIntentions([]);
     setSelectedSoundscapes([]);
@@ -171,6 +184,12 @@ export default function UploadScreen() {
           duration: duration.trim(),
           is_sample: isSample,
           intensity: intensity,
+          words: words,
+          voice: voice,
+          sleep_safe: sleepSafe,
+          trip_safe: tripSafe,
+          channeled: channeled,
+          contains_dissonance: containsDissonance,
         })
         .select()
         .single();
@@ -418,12 +437,66 @@ export default function UploadScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Is Sample</Text>
+          <Text style={styles.label}>Track Properties</Text>
           <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>This track is a sample/preview</Text>
+            <Text style={styles.toggleLabel}>Is Sample</Text>
             <Switch
               value={isSample}
               onValueChange={setIsSample}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+          <View style={[styles.toggleRow, styles.toggleRowSpacing]}>
+            <Text style={styles.toggleLabel}>Contains Words</Text>
+            <Switch
+              value={words}
+              onValueChange={setWords}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+          <View style={[styles.toggleRow, styles.toggleRowSpacing]}>
+            <Text style={styles.toggleLabel}>Contains Voice</Text>
+            <Switch
+              value={voice}
+              onValueChange={setVoice}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+          <View style={[styles.toggleRow, styles.toggleRowSpacing]}>
+            <Text style={styles.toggleLabel}>Sleep Safe</Text>
+            <Switch
+              value={sleepSafe}
+              onValueChange={setSleepSafe}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+          <View style={[styles.toggleRow, styles.toggleRowSpacing]}>
+            <Text style={styles.toggleLabel}>Trip Safe</Text>
+            <Switch
+              value={tripSafe}
+              onValueChange={setTripSafe}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+          <View style={[styles.toggleRow, styles.toggleRowSpacing]}>
+            <Text style={styles.toggleLabel}>Channeled</Text>
+            <Switch
+              value={channeled}
+              onValueChange={setChanneled}
+              trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
+              thumbColor={Colors.dark.text}
+            />
+          </View>
+          <View style={[styles.toggleRow, styles.toggleRowSpacing]}>
+            <Text style={styles.toggleLabel}>Contains Dissonance</Text>
+            <Switch
+              value={containsDissonance}
+              onValueChange={setContainsDissonance}
               trackColor={{ false: Colors.dark.border, true: Colors.dark.primary }}
               thumbColor={Colors.dark.text}
             />
@@ -591,6 +664,9 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 15,
     color: Colors.dark.text,
+  },
+  toggleRowSpacing: {
+    marginTop: 8,
   },
   dropdown: {
     flexDirection: 'row',
