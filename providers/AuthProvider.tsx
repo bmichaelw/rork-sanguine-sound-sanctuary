@@ -1,5 +1,5 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/services/supabase';
 import type { User, Session } from '@supabase/supabase-js';
@@ -142,15 +142,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const signUp = useCallback(async (email: string, password: string) => {
     return signUpMutation.mutateAsync({ email, password });
-  }, [signUpMutation]);
+  }, [signUpMutation.mutateAsync]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     return signInMutation.mutateAsync({ email, password });
-  }, [signInMutation]);
+  }, [signInMutation.mutateAsync]);
 
   const signOut = useCallback(async () => {
     return signOutMutation.mutateAsync();
-  }, [signOutMutation]);
+  }, [signOutMutation.mutateAsync]);
 
   return {
     user: authState.user,
