@@ -13,13 +13,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
-import {
-  Upload,
-  Music,
-  Check,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react-native';
+import { Upload, Music, ChevronDown } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import {
   supabase,
@@ -33,6 +27,7 @@ import {
   SupabaseChakra,
 } from '@/services/supabase';
 import { uploadToB2 } from '@/services/backblaze';
+import MultiSelectSection from '@/components/upload/MultiSelectSection';
 
 interface SelectedFile {
   uri: string;
@@ -204,66 +199,44 @@ export default function UploadScreen() {
       setUploadStatus('Saving metadata...');
       console.log('[Upload] Saving join table entries...');
 
-      const joinPromises: Promise<any>[] = [];
+      const insertPromises = [];
 
       if (selectedModalities.length > 0) {
-        console.log('[Upload] Adding modalities:', selectedModalities);
-        const modalityRows = selectedModalities.map(id => ({
-          track_id: track.id,
-          modality_id: id,
-        }));
-        joinPromises.push(
-          (async () => {
-            const { error } = await supabase.from('track_modalities').insert(modalityRows);
-            if (error) console.error('[Upload] track_modalities error:', error);
-          })()
+        insertPromises.push(
+          supabase.from('track_modalities').insert(
+            selectedModalities.map(id => ({ track_id: track.id, modality_id: id }))
+          )
         );
       }
 
       if (selectedIntentions.length > 0) {
-        console.log('[Upload] Adding intentions:', selectedIntentions);
-        const intentionRows = selectedIntentions.map(id => ({
-          track_id: track.id,
-          intention_id: id,
-        }));
-        joinPromises.push(
-          (async () => {
-            const { error } = await supabase.from('track_intentions').insert(intentionRows);
-            if (error) console.error('[Upload] track_intentions error:', error);
-          })()
+        insertPromises.push(
+          supabase.from('track_intentions').insert(
+            selectedIntentions.map(id => ({ track_id: track.id, intention_id: id }))
+          )
         );
       }
 
       if (selectedSoundscapes.length > 0) {
-        console.log('[Upload] Adding soundscapes:', selectedSoundscapes);
-        const soundscapeRows = selectedSoundscapes.map(id => ({
-          track_id: track.id,
-          soundscape_id: id,
-        }));
-        joinPromises.push(
-          (async () => {
-            const { error } = await supabase.from('track_soundscapes').insert(soundscapeRows);
-            if (error) console.error('[Upload] track_soundscapes error:', error);
-          })()
+        insertPromises.push(
+          supabase.from('track_soundscapes').insert(
+            selectedSoundscapes.map(id => ({ track_id: track.id, soundscape_id: id }))
+          )
         );
       }
 
       if (selectedChakras.length > 0) {
-        console.log('[Upload] Adding chakras:', selectedChakras);
-        const chakraRows = selectedChakras.map(id => ({
-          track_id: track.id,
-          chakra_id: id,
-        }));
-        joinPromises.push(
-          (async () => {
-            const { error } = await supabase.from('track_chakras').insert(chakraRows);
-            if (error) console.error('[Upload] track_chakras error:', error);
-          })()
+        insertPromises.push(
+          supabase.from('track_chakras').insert(
+            selectedChakras.map(id => ({ track_id: track.id, chakra_id: id }))
+          )
         );
       }
 
-      await Promise.all(joinPromises);
-      console.log('[Upload] All join tables updated successfully');
+      if (insertPromises.length > 0) {
+        await Promise.all(insertPromises);
+        console.log('[Upload] Metadata saved');
+      }
 
       return track;
     },
@@ -323,71 +296,7 @@ export default function UploadScreen() {
     setExpandedSection(prev => prev === section ? null : section);
   }, []);
 
-  const renderMultiSelect = (
-    sectionTitle: string,
-    sectionKey: string,
-    items: { id: string; name: string }[],
-    selected: string[],
-    setSelected: React.Dispatch<React.SetStateAction<string[]>>,
-    isLoading?: boolean
-  ) => (
-    <View style={styles.section}>
-      <TouchableOpacity 
-        style={styles.sectionHeader} 
-        onPress={() => toggleSection(sectionKey)}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.sectionTitle}>
-          {sectionTitle} {selected.length > 0 && `(${selected.length})`}
-        </Text>
-        {expandedSection === sectionKey ? (
-          <ChevronUp color={Colors.dark.textMuted} size={20} />
-        ) : (
-          <ChevronDown color={Colors.dark.textMuted} size={20} />
-        )}
-      </TouchableOpacity>
-      
-      {expandedSection === sectionKey && (
-        <View style={styles.checkboxGrid}>
-          {isLoading ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color={Colors.dark.primary} />
-              <Text style={styles.loadingText}>Loading...</Text>
-            </View>
-          ) : items.length === 0 ? (
-            <Text style={styles.emptyText}>No options available</Text>
-          ) : (
-            items.map(item => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.checkboxItem,
-                  selected.includes(item.id) && styles.checkboxItemSelected
-                ]}
-                onPress={() => toggleSelection(item.id, selected, setSelected)}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.checkbox,
-                  selected.includes(item.id) && styles.checkboxChecked
-                ]}>
-                  {selected.includes(item.id) && (
-                    <Check color={Colors.dark.background} size={12} strokeWidth={3} />
-                  )}
-                </View>
-                <Text style={[
-                  styles.checkboxLabel,
-                  selected.includes(item.id) && styles.checkboxLabelSelected
-                ]}>
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-      )}
-    </View>
-  );
+
 
   return (
     <View style={styles.container}>
@@ -542,10 +451,50 @@ export default function UploadScreen() {
           )}
         </View>
 
-        {renderMultiSelect('Modalities', 'modalities', modalities, selectedModalities, setSelectedModalities, loadingModalities)}
-        {renderMultiSelect('Intentions', 'intentions', intentions, selectedIntentions, setSelectedIntentions, loadingIntentions)}
-        {renderMultiSelect('Soundscapes', 'soundscapes', soundscapes, selectedSoundscapes, setSelectedSoundscapes, loadingSoundscapes)}
-        {renderMultiSelect('Chakras', 'chakras', chakras, selectedChakras, setSelectedChakras, loadingChakras)}
+        <MultiSelectSection
+          sectionTitle="Modalities"
+          sectionKey="modalities"
+          items={modalities}
+          selected={selectedModalities}
+          setSelected={setSelectedModalities}
+          isLoading={loadingModalities}
+          expandedSection={expandedSection}
+          toggleSection={toggleSection}
+          toggleSelection={toggleSelection}
+        />
+        <MultiSelectSection
+          sectionTitle="Intentions"
+          sectionKey="intentions"
+          items={intentions}
+          selected={selectedIntentions}
+          setSelected={setSelectedIntentions}
+          isLoading={loadingIntentions}
+          expandedSection={expandedSection}
+          toggleSection={toggleSection}
+          toggleSelection={toggleSelection}
+        />
+        <MultiSelectSection
+          sectionTitle="Soundscapes"
+          sectionKey="soundscapes"
+          items={soundscapes}
+          selected={selectedSoundscapes}
+          setSelected={setSelectedSoundscapes}
+          isLoading={loadingSoundscapes}
+          expandedSection={expandedSection}
+          toggleSection={toggleSection}
+          toggleSelection={toggleSelection}
+        />
+        <MultiSelectSection
+          sectionTitle="Chakras"
+          sectionKey="chakras"
+          items={chakras}
+          selected={selectedChakras}
+          setSelected={setSelectedChakras}
+          isLoading={loadingChakras}
+          expandedSection={expandedSection}
+          toggleSection={toggleSection}
+          toggleSelection={toggleSelection}
+        />
 
         <View style={styles.footer} />
       </ScrollView>
@@ -700,82 +649,7 @@ const styles = StyleSheet.create({
     color: Colors.dark.primary,
     fontWeight: '500' as const,
   },
-  section: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.dark.text,
-  },
-  checkboxGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-  },
-  checkboxItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  checkboxItemSelected: {
-    backgroundColor: Colors.dark.primaryGlow,
-    borderColor: Colors.dark.primary,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: Colors.dark.textMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: Colors.dark.primary,
-    borderColor: Colors.dark.primary,
-  },
-  checkboxLabel: {
-    fontSize: 13,
-    color: Colors.dark.textSecondary,
-  },
-  checkboxLabelSelected: {
-    color: Colors.dark.text,
-    fontWeight: '500' as const,
-  },
-  loadingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: Colors.dark.textMuted,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.dark.textMuted,
-    padding: 12,
-  },
+
   footer: {
     height: 40,
   },
