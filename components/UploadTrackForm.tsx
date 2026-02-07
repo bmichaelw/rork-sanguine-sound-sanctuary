@@ -34,7 +34,6 @@ import {
   fetchIntensities,
   uploadFileToStorage,
   createTrack,
-  checkAuthStatus,
   UploadTrackData,
   SupabaseModality,
   SupabaseIntention,
@@ -42,6 +41,7 @@ import {
   SupabaseChakra,
   SupabaseIntensity,
 } from '@/services/supabase';
+import { useAuth } from '@/providers/AuthProvider';
 import { uploadToB2 } from '@/services/backblaze';
 
 interface UploadTrackFormProps {
@@ -58,6 +58,7 @@ interface SelectedFile {
 
 export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormProps) {
   const queryClient = useQueryClient();
+  const { isAuthenticated, user, isInitialized } = useAuth();
   
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState('');
@@ -140,9 +141,8 @@ export default function UploadTrackForm({ onClose, onSuccess }: UploadTrackFormP
       console.log('[Upload] Starting upload process...');
       setUploadStatus('Checking authentication...');
       
-      const authStatus = await checkAuthStatus();
-      console.log('[Upload] Auth status:', authStatus);
-      if (!authStatus.authenticated) {
+      console.log('[Upload] Auth status from context:', { isAuthenticated, userId: user?.id, isInitialized });
+      if (!isAuthenticated || !user) {
         throw new Error('You must be logged in to upload tracks. Please log in and try again.');
       }
       
