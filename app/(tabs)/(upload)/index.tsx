@@ -41,11 +41,12 @@ interface SelectedFile {
   size?: number;
 }
 
-type IntensityValue = 'gentle' | 'moderate' | 'intense';
+type IntensityValue = 'gentle' | 'moderate' | 'deep' | 'intense';
 
 const INTENSITY_OPTIONS: { value: IntensityValue; label: string }[] = [
   { value: 'gentle', label: 'Gentle' },
   { value: 'moderate', label: 'Moderate' },
+  { value: 'deep', label: 'Deep' },
   { value: 'intense', label: 'Intense' },
 ];
 
