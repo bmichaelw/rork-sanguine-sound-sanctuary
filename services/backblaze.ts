@@ -3,7 +3,7 @@ import CryptoJS from 'crypto-js';
 const B2_KEY_ID = process.env.EXPO_PUBLIC_B2_KEY_ID || '';
 const B2_APP_KEY = process.env.EXPO_PUBLIC_B2_APP_KEY || '';
 const B2_BUCKET_NAME = process.env.EXPO_PUBLIC_B2_BUCKET_NAME || 'SST-Sound-Library-Audio';
-const B2_ENDPOINT = 's3.us-west-005.backblazeb2.com';
+const B2_ENDPOINT = 's3.us-east-005.backblazeb2.com';
 
 interface B2AuthResponse {
   accountId: string;
