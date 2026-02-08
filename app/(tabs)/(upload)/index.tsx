@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as DocumentPicker from 'expo-document-picker';
-import { Upload, Music, ChevronDown } from 'lucide-react-native';
+import { Upload, Music, ChevronDown, Image as ImageIcon } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import {
   supabase,
@@ -36,6 +36,8 @@ interface SelectedFile {
   size?: number;
 }
 
+type ImageInputMode = 'upload' | 'url';
+
 type IntensityValue = 'gentle' | 'moderate' | 'deep' | 'intense';
 
 const INTENSITY_OPTIONS: { value: IntensityValue; label: string }[] = [
@@ -51,6 +53,9 @@ export default function UploadScreen() {
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState('');
   const [audioFile, setAudioFile] = useState<SelectedFile | null>(null);
+  const [imageInputMode, setImageInputMode] = useState<ImageInputMode>('upload');
+  const [imageFile, setImageFile] = useState<SelectedFile | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [isSample, setIsSample] = useState(false);
   const [intensity, setIntensity] = useState<IntensityValue | null>(null);
   const [words, setWords] = useState(false);
@@ -92,6 +97,9 @@ export default function UploadScreen() {
     setTitle('');
     setDuration('');
     setAudioFile(null);
+    setImageInputMode('upload');
+    setImageFile(null);
+    setImageUrl('');
     setIsSample(false);
     setIntensity(null);
     setWords(false);
@@ -142,8 +150,8 @@ export default function UploadScreen() {
         throw new Error('Failed to read audio file. Please try again.');
       }
 
-      setUploadStatus('Uploading to Backblaze B2...');
-      console.log('[Upload] Uploading to B2...');
+      setUploadStatus('Uploading audio to Backblaze B2...');
+      console.log('[Upload] Uploading audio to B2...');
       
       let fileUrl: string;
       try {
@@ -153,18 +161,55 @@ export default function UploadScreen() {
           audioFile.mimeType,
           (progress) => {
             if (progress < 30) {
-              setUploadStatus('Preparing upload...');
+              setUploadStatus('Preparing audio upload...');
             } else if (progress < 90) {
-              setUploadStatus(`Uploading... ${progress}%`);
+              setUploadStatus(`Uploading audio... ${progress}%`);
             } else {
-              setUploadStatus('Finalizing upload...');
+              setUploadStatus('Finalizing audio upload...');
             }
           }
         );
-        console.log('[Upload] B2 upload successful:', fileUrl);
+        console.log('[Upload] B2 audio upload successful:', fileUrl);
       } catch (err: any) {
-        console.error('[Upload] B2 upload failed:', err?.message);
+        console.error('[Upload] B2 audio upload failed:', err?.message);
         throw new Error(err?.message || 'Failed to upload audio file');
+      }
+
+      let finalImageUrl: string | null = null;
+      if (imageInputMode === 'upload' && imageFile) {
+        setUploadStatus('Uploading image to Backblaze B2...');
+        console.log('[Upload] Uploading image to B2...');
+        
+        try {
+          const imageResponse = await fetch(imageFile.uri);
+          if (!imageResponse.ok) {
+            throw new Error(`Failed to read image file: ${imageResponse.status}`);
+          }
+          const imageBlob = await imageResponse.blob();
+          console.log('[Upload] Image blob created, size:', imageBlob.size);
+          
+          finalImageUrl = await uploadToB2(
+            imageBlob,
+            imageFile.name,
+            imageFile.mimeType,
+            (progress) => {
+              if (progress < 30) {
+                setUploadStatus('Preparing image upload...');
+              } else if (progress < 90) {
+                setUploadStatus(`Uploading image... ${progress}%`);
+              } else {
+                setUploadStatus('Finalizing image upload...');
+              }
+            }
+          );
+          console.log('[Upload] B2 image upload successful:', finalImageUrl);
+        } catch (err: any) {
+          console.error('[Upload] B2 image upload failed:', err?.message);
+          throw new Error(`Image upload failed: ${err?.message || 'Unknown error'}`);
+        }
+      } else if (imageInputMode === 'url' && imageUrl.trim()) {
+        finalImageUrl = imageUrl.trim();
+        console.log('[Upload] Using provided image URL:', finalImageUrl);
       }
 
       setUploadStatus('Creating track in database...');
@@ -176,6 +221,7 @@ export default function UploadScreen() {
           title: title.trim(),
           artist_id: 1,
           file_url: fileUrl,
+          image_url: finalImageUrl,
           duration: duration.trim(),
           is_sample: isSample,
           intensity: intensity,
@@ -257,7 +303,7 @@ export default function UploadScreen() {
   });
 
   const pickAudioFile = useCallback(async () => {
-    console.log('[Upload] Opening file picker...');
+    console.log('[Upload] Opening audio file picker...');
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['audio/mpeg', 'audio/mp4', 'audio/x-m4a', 'audio/*'],
@@ -266,7 +312,7 @@ export default function UploadScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        console.log('[Upload] File selected:', asset.name, 'size:', asset.size);
+        console.log('[Upload] Audio file selected:', asset.name, 'size:', asset.size);
         setAudioFile({
           uri: asset.uri,
           name: asset.name,
@@ -274,11 +320,37 @@ export default function UploadScreen() {
           size: asset.size,
         });
       } else {
-        console.log('[Upload] File picker cancelled');
+        console.log('[Upload] Audio file picker cancelled');
       }
     } catch (error: any) {
-      console.error('[Upload] File picker error:', error?.message);
+      console.error('[Upload] Audio file picker error:', error?.message);
       Alert.alert('Error', 'Failed to select audio file');
+    }
+  }, []);
+
+  const pickImageFile = useCallback(async () => {
+    console.log('[Upload] Opening image file picker...');
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        console.log('[Upload] Image file selected:', asset.name, 'size:', asset.size);
+        setImageFile({
+          uri: asset.uri,
+          name: asset.name,
+          mimeType: asset.mimeType || 'image/jpeg',
+          size: asset.size,
+        });
+      } else {
+        console.log('[Upload] Image file picker cancelled');
+      }
+    } catch (error: any) {
+      console.error('[Upload] Image file picker error:', error?.message);
+      Alert.alert('Error', 'Failed to select image file');
     }
   }, []);
 
@@ -332,6 +404,70 @@ export default function UploadScreen() {
               )}
             </View>
           </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Artwork/Image</Text>
+          <View style={styles.toggleModeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.toggleModeButton,
+                imageInputMode === 'upload' && styles.toggleModeButtonActive,
+              ]}
+              onPress={() => setImageInputMode('upload')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.toggleModeText,
+                  imageInputMode === 'upload' && styles.toggleModeTextActive,
+                ]}
+              >
+                Upload Image
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleModeButton,
+                imageInputMode === 'url' && styles.toggleModeButtonActive,
+              ]}
+              onPress={() => setImageInputMode('url')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.toggleModeText,
+                  imageInputMode === 'url' && styles.toggleModeTextActive,
+                ]}
+              >
+                Paste URL
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {imageInputMode === 'upload' ? (
+            <TouchableOpacity style={styles.filePicker} onPress={pickImageFile} activeOpacity={0.7}>
+              <ImageIcon color={imageFile ? Colors.dark.primary : Colors.dark.textMuted} size={24} />
+              <View style={styles.filePickerContent}>
+                <Text style={[styles.filePickerText, imageFile && styles.filePickerTextSelected]}>
+                  {imageFile ? imageFile.name : 'Select image file (.jpg, .png, .webp)'}
+                </Text>
+                {imageFile?.size && (
+                  <Text style={styles.fileSizeText}>
+                    {(imageFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TextInput
+              style={styles.textInput}
+              value={imageUrl}
+              onChangeText={setImageUrl}
+              placeholder="https://f005.backblazeb2.com/file/SST-Sound-Library-Audio/..."
+              placeholderTextColor={Colors.dark.textMuted}
+            />
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -675,6 +811,33 @@ const styles = StyleSheet.create({
   submitButtonText: {
     fontSize: 16,
     fontWeight: '600' as const,
+    color: Colors.dark.text,
+  },
+  toggleModeContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  toggleModeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  toggleModeButtonActive: {
+    backgroundColor: Colors.dark.primary,
+  },
+  toggleModeText: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: Colors.dark.textMuted,
+  },
+  toggleModeTextActive: {
     color: Colors.dark.text,
   },
 });
