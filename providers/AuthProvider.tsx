@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-linking';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/services/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -169,10 +169,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     mutationFn: async () => {
       console.log('[Auth] Starting Google sign in...');
       
-      const redirectUrl = makeRedirectUri({
-        scheme: 'com.anonymous.expo-app',
-        path: 'auth/callback',
-      });
+      const redirectUrl = Linking.createURL('auth/callback');
       
       console.log('[Auth] OAuth redirect URL:', redirectUrl);
 
