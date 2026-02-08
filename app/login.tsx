@@ -29,42 +29,54 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    console.log('[Login] handleSubmit called, isSignUp:', isSignUp);
     setError(null);
 
     if (!email.trim()) {
+      console.log('[Login] Validation failed: empty email');
       setError('Please enter your email');
       return;
     }
 
     if (!password.trim()) {
+      console.log('[Login] Validation failed: empty password');
       setError('Please enter your password');
       return;
     }
 
     if (isSignUp && password !== confirmPassword) {
+      console.log('[Login] Validation failed: passwords do not match');
       setError('Passwords do not match');
       return;
     }
 
     if (isSignUp && password.length < 6) {
+      console.log('[Login] Validation failed: password too short');
       setError('Password must be at least 6 characters');
       return;
     }
 
     try {
       if (isSignUp) {
+        console.log('[Login] Attempting sign up...');
         await signUp(email.trim(), password);
+        console.log('[Login] Sign up successful');
         Alert.alert(
           'Check your email',
           'We sent you a confirmation link. Please verify your email to continue.',
           [{ text: 'OK' }]
         );
       } else {
+        console.log('[Login] Attempting sign in...');
         await signIn(email.trim(), password);
+        console.log('[Login] Sign in successful, navigating to app...');
         router.replace('/(tabs)/(listen)');
+        console.log('[Login] Navigation completed');
       }
     } catch (err: any) {
       console.error('[Login] Error:', err);
+      console.error('[Login] Error message:', err?.message);
+      console.error('[Login] Error details:', JSON.stringify(err, null, 2));
       setError(err.message || 'An error occurred');
     }
   };
