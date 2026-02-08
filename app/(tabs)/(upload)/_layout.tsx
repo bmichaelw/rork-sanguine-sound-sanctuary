@@ -25,7 +25,7 @@ export default function UploadLayout() {
           title: 'Admin Dashboard',
           headerLeft: () => (
             <TouchableOpacity
-              onPress={() => router.push('/(tabs)/(account)')}
+              onPress={() => router.replace('/(account)')}
               style={{ marginLeft: 8 }}
               activeOpacity={0.7}
             >
