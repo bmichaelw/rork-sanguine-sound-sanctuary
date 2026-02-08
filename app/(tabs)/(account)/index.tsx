@@ -7,7 +7,6 @@ import {
   TouchableOpacity, 
   Switch,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -23,24 +22,20 @@ import {
   LogIn,
   LogOut,
   User,
-  Upload,
-  Music,
-  BarChart3,
+
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
 import Colors from '@/constants/colors';
 import { typography } from '@/constants/typography';
 import { useAudio } from '@/providers/AudioProvider';
 import { useAuth } from '@/providers/AuthProvider';
-import { fetchLibraryStats } from '@/services/supabase';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { membership, setMembership } = useAudio();
-  const { user, isAuthenticated, isAdmin, signOut, isLoading } = useAuth();
+  const { user, isAuthenticated, signOut, isLoading } = useAuth();
   const [sleepTimer, setSleepTimer] = React.useState(false);
   const [notifications, setNotifications] = React.useState(true);
 
@@ -75,20 +70,6 @@ export default function AccountScreen() {
     }
     router.push('/login');
   };
-
-  const handleUploadPress = () => {
-    if (Platform.OS !== 'web') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    router.push('/upload');
-  };
-
-  const statsQuery = useQuery({
-    queryKey: ['library-stats'],
-    queryFn: fetchLibraryStats,
-    enabled: isAdmin && isAuthenticated,
-    staleTime: 60000,
-  });
 
   return (
     <View style={styles.container}>
@@ -131,66 +112,7 @@ export default function AccountScreen() {
               </TouchableOpacity>
             </View>
 
-            {isAdmin && (
-              <View style={styles.adminSection}>
-                <View style={styles.adminHeader}>
-                  <BarChart3 color={Colors.dark.primary} size={20} />
-                  <Text style={styles.adminHeaderText}>Admin Dashboard</Text>
-                </View>
 
-                <TouchableOpacity
-                  style={styles.uploadButton}
-                  onPress={handleUploadPress}
-                  activeOpacity={0.8}
-                >
-                  <LinearGradient
-                    colors={[Colors.dark.primary, Colors.dark.primaryMuted]}
-                    style={StyleSheet.absoluteFill}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                  />
-                  <Upload color={Colors.dark.background} size={20} />
-                  <Text style={styles.uploadButtonText}>Upload New Track</Text>
-                  <ChevronRight color={Colors.dark.background} size={20} />
-                </TouchableOpacity>
-
-                <View style={styles.statsCard}>
-                  <Text style={styles.statsTitle}>Library Statistics</Text>
-                  
-                  {statsQuery.isLoading ? (
-                    <View style={styles.statsLoading}>
-                      <ActivityIndicator color={Colors.dark.primary} />
-                    </View>
-                  ) : statsQuery.error ? (
-                    <Text style={styles.statsError}>Failed to load stats</Text>
-                  ) : (
-                    <>
-                      <View style={styles.statRow}>
-                        <View style={styles.statIconContainer}>
-                          <Music color={Colors.dark.primary} size={18} />
-                        </View>
-                        <View style={styles.statContent}>
-                          <Text style={styles.statLabel}>Total Tracks</Text>
-                          <Text style={styles.statValue}>{statsQuery.data?.totalTracks || 0}</Text>
-                        </View>
-                      </View>
-
-                      {statsQuery.data?.tracksPerModality.slice(0, 3).map((modality, index) => (
-                        <View key={modality.name} style={styles.statRow}>
-                          <View style={[styles.statIconContainer, styles.statIconSecondary]}>
-                            <Text style={styles.statIconText}>{index + 1}</Text>
-                          </View>
-                          <View style={styles.statContent}>
-                            <Text style={styles.statLabel}>{modality.name}</Text>
-                            <Text style={styles.statValue}>{modality.count} tracks</Text>
-                          </View>
-                        </View>
-                      ))}
-                    </>
-                  )}
-                </View>
-              </View>
-            )}
           </>
         ) : (
           <TouchableOpacity
@@ -507,104 +429,7 @@ const styles = StyleSheet.create({
     opacity: 0.3,
     fontSize: 9,
   },
-  adminSection: {
-    marginHorizontal: 20,
-    marginBottom: 24,
-  },
-  adminHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    gap: 8,
-  },
-  adminHeaderText: {
-    ...typography.subtitle,
-    color: Colors.dark.text,
-    fontSize: 18,
-    fontWeight: '700' as const,
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-    gap: 10,
-    overflow: 'hidden',
-  },
-  uploadButtonText: {
-    ...typography.subtitle,
-    color: Colors.dark.background,
-    fontSize: 16,
-    fontWeight: '600' as const,
-    flex: 1,
-  },
-  statsCard: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  statsTitle: {
-    ...typography.subtitle,
-    color: Colors.dark.text,
-    fontSize: 16,
-    fontWeight: '600' as const,
-    marginBottom: 16,
-  },
-  statsLoading: {
-    paddingVertical: 20,
-    alignItems: 'center',
-  },
-  statsError: {
-    ...typography.body,
-    color: Colors.dark.error,
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.dark.borderSubtle,
-  },
-  statIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.dark.primaryGlow,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statIconSecondary: {
-    backgroundColor: Colors.dark.surfaceElevated,
-  },
-  statIconText: {
-    ...typography.subtitle,
-    color: Colors.dark.textSecondary,
-    fontSize: 14,
-    fontWeight: '600' as const,
-  },
-  statContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  statLabel: {
-    ...typography.bodySmall,
-    color: Colors.dark.textSecondary,
-    fontSize: 13,
-  },
-  statValue: {
-    ...typography.subtitle,
-    color: Colors.dark.text,
-    fontSize: 16,
-    fontWeight: '600' as const,
-    marginTop: 2,
-  },
+
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
