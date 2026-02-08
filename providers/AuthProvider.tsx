@@ -55,22 +55,42 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   useEffect(() => {
     console.log('[Auth] Initializing auth listener...');
     
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      console.log('[Auth] Initial session:', session?.user?.email || 'none');
-      
-      let isAdmin = false;
-      if (session?.user?.email) {
-        isAdmin = await checkAdminStatus(session.user.email);
+    const initAuth = async () => {
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Session check timeout')), 10000);
+        });
+        
+        const sessionPromise = supabase.auth.getSession();
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as Awaited<typeof sessionPromise>;
+        
+        console.log('[Auth] Initial session:', session?.user?.email || 'none');
+        
+        let isAdmin = false;
+        if (session?.user?.email) {
+          isAdmin = await checkAdminStatus(session.user.email);
+        }
+        
+        setAuthState({
+          user: session?.user ?? null,
+          session: session,
+          isAdmin,
+          isLoading: false,
+          isInitialized: true,
+        });
+      } catch (err: any) {
+        console.error('[Auth] Failed to initialize session:', err?.message || err);
+        setAuthState({
+          user: null,
+          session: null,
+          isAdmin: false,
+          isLoading: false,
+          isInitialized: true,
+        });
       }
-      
-      setAuthState({
-        user: session?.user ?? null,
-        session: session,
-        isAdmin,
-        isLoading: false,
-        isInitialized: true,
-      });
-    });
+    };
+    
+    initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] Auth state changed:', event, session?.user?.email);
