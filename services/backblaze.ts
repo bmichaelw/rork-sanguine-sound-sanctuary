@@ -290,41 +290,6 @@ export async function uploadToB2(
     throw new Error(`File too large. Maximum size is ${MAX_SIZE / 1024 / 1024}MB`);
   }
 
-  console.log('[B2 S3] Running pre-flight check...');
-  const accessTest = await testBucketAccess();
-  console.log('[B2 S3] Pre-flight result:', accessTest.message);
-  
-  if (!accessTest.success) {
-    console.error('[B2 S3] ❌ Pre-flight check failed!');
-    console.error('[B2 S3]');
-    console.error('[B2 S3] ⚠️  CORS CONFIGURATION REQUIRED ⚠️');
-    console.error('[B2 S3]');
-    console.error('[B2 S3] Your Backblaze B2 bucket needs CORS configured.');
-    console.error('[B2 S3]');
-    console.error('[B2 S3] HOW TO FIX:');
-    console.error('[B2 S3] 1. Go to: https://secure.backblaze.com/b2_buckets.htm');
-    console.error('[B2 S3] 2. Click on bucket:', B2_BUCKET_NAME);
-    console.error('[B2 S3] 3. Click "Bucket Settings"');
-    console.error('[B2 S3] 4. Scroll to "CORS Rules" section');
-    console.error('[B2 S3] 5. Click "Add a CORS Rule"');
-    console.error('[B2 S3] 6. Paste this JSON:');
-    console.error('[B2 S3]');
-    console.error('[B2 S3] {');
-    console.error('[B2 S3]   "corsRuleName": "allowWebUpload",');
-    console.error('[B2 S3]   "allowedOrigins": ["*"],');
-    console.error('[B2 S3]   "allowedOperations": ["s3_put", "s3_get", "s3_head"],');
-    console.error('[B2 S3]   "allowedHeaders": ["*"],');
-    console.error('[B2 S3]   "exposeHeaders": ["ETag", "x-amz-request-id"],');
-    console.error('[B2 S3]   "maxAgeSeconds": 3600');
-    console.error('[B2 S3] }');
-    console.error('[B2 S3]');
-    console.error('[B2 S3] 7. Click "Save"');
-    console.error('[B2 S3] 8. Wait 1-2 minutes for changes to propagate');
-    console.error('[B2 S3] 9. Try uploading again');
-    console.error('[B2 S3]');
-    throw new Error(`❌ CORS NOT CONFIGURED: Your B2 bucket "${B2_BUCKET_NAME}" must have CORS rules. Check the debug logs above for step-by-step instructions.`);
-  }
-
   try {
     onProgress?.(10);
     const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
