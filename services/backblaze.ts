@@ -3,6 +3,7 @@ import CryptoJS from 'crypto-js';
 const B2_KEY_ID = process.env.EXPO_PUBLIC_B2_KEY_ID || '';
 const B2_APP_KEY = process.env.EXPO_PUBLIC_B2_APP_KEY || '';
 const B2_BUCKET_NAME = process.env.EXPO_PUBLIC_B2_BUCKET_NAME || 'SST-Sound-Library-Audio';
+const B2_ENDPOINT = 's3.us-west-005.backblazeb2.com';
 
 interface B2AuthResponse {
   accountId: string;
@@ -181,134 +182,134 @@ export async function uploadToB2(
   contentType: string,
   onProgress?: (progress: number) => void
 ): Promise<string> {
-  console.log('[B2 Direct] ============================================');
-  console.log('[B2 Direct] STARTING UPLOAD');
-  console.log('[B2 Direct] File name:', fileName);
-  console.log('[B2 Direct] File size:', file.size, 'bytes', '(', (file.size / 1024 / 1024).toFixed(2), 'MB )');
-  console.log('[B2 Direct] Content type:', contentType);
-  console.log('[B2 Direct] Blob type:', file.type);
-  console.log('[B2 Direct] ============================================');
+  console.log('[B2 S3] ============================================');
+  console.log('[B2 S3] STARTING S3-COMPATIBLE UPLOAD');
+  console.log('[B2 S3] File name:', fileName);
+  console.log('[B2 S3] File size:', file.size, 'bytes', '(', (file.size / 1024 / 1024).toFixed(2), 'MB )');
+  console.log('[B2 S3] Content type:', contentType);
+  console.log('[B2 S3] Endpoint:', B2_ENDPOINT);
+  console.log('[B2 S3] Bucket:', B2_BUCKET_NAME);
+  console.log('[B2 S3] ============================================');
   
+  if (!B2_KEY_ID || !B2_APP_KEY) {
+    throw new Error('B2 credentials not configured');
+  }
+
   if (file.size === 0) {
-    console.error('[B2 Direct] ❌ File is empty!');
     throw new Error('File is empty');
   }
 
   const MAX_SIZE = 500 * 1024 * 1024;
   if (file.size > MAX_SIZE) {
-    console.error('[B2 Direct] ❌ File too large:', file.size, 'bytes');
     throw new Error(`File too large. Maximum size is ${MAX_SIZE / 1024 / 1024}MB`);
   }
 
   try {
-    console.log('[B2 Direct] Step 1/6: Authorizing account...');
-    onProgress?.(5);
-    const auth = await authorizeAccount();
-    console.log('[B2 Direct] ✅ Step 1/6 complete');
-    
-    console.log('[B2 Direct] Step 2/6: Getting bucket ID...');
     onProgress?.(10);
-    const bucketId = await getBucketId(auth);
-    console.log('[B2 Direct] ✅ Step 2/6 complete');
-    
-    console.log('[B2 Direct] Step 3/6: Getting upload URL...');
-    onProgress?.(15);
-    const uploadUrl = await getUploadUrl(auth, bucketId);
-    console.log('[B2 Direct] ✅ Step 3/6 complete');
-    
-    console.log('[B2 Direct] Step 4/6: Reading file and computing SHA1...');
-    onProgress?.(20);
-    const arrayBuffer = await file.arrayBuffer();
-    console.log('[B2 Direct] ArrayBuffer size:', arrayBuffer.byteLength, 'bytes');
-    
-    const sha1Hash = computeSha1(arrayBuffer);
-    console.log('[B2 Direct] SHA1 hash:', sha1Hash);
-    
     const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const timestamp = Date.now();
     const finalFileName = `${timestamp}_${safeFileName}`;
-    console.log('[B2 Direct] Final filename:', finalFileName);
-    console.log('[B2 Direct] ✅ Step 4/6 complete');
+    console.log('[B2 S3] Final filename:', finalFileName);
     
-    console.log('[B2 Direct] Step 5/6: Uploading to B2...');
-    console.log('[B2 Direct] Upload URL:', uploadUrl.uploadUrl);
-    console.log('[B2 Direct] Headers:');
-    console.log('[B2 Direct]   X-Bz-File-Name:', encodeURIComponent(finalFileName));
-    console.log('[B2 Direct]   Content-Type:', contentType);
-    console.log('[B2 Direct]   Content-Length:', arrayBuffer.byteLength);
-    console.log('[B2 Direct]   X-Bz-Content-Sha1:', sha1Hash);
+    onProgress?.(20);
+    console.log('[B2 S3] Reading file...');
+    const arrayBuffer = await file.arrayBuffer();
+    console.log('[B2 S3] File read, size:', arrayBuffer.byteLength);
+    
     onProgress?.(30);
+    console.log('[B2 S3] Computing content MD5...');
+    const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer as any);
+    const md5Hash = CryptoJS.MD5(wordArray);
+    const contentMD5 = CryptoJS.enc.Base64.stringify(md5Hash);
+    console.log('[B2 S3] MD5:', contentMD5);
     
+    const dateString = new Date().toUTCString();
+    const stringToSign = `PUT\n${contentMD5}\n${contentType}\n${dateString}\n/${B2_BUCKET_NAME}/${finalFileName}`;
+    console.log('[B2 S3] String to sign:', stringToSign);
+    
+    const signature = CryptoJS.HmacSHA1(stringToSign, B2_APP_KEY);
+    const authorizationHeader = `AWS ${B2_KEY_ID}:${CryptoJS.enc.Base64.stringify(signature)}`;
+    
+    const uploadUrl = `https://${B2_ENDPOINT}/${B2_BUCKET_NAME}/${finalFileName}`;
+    console.log('[B2 S3] Upload URL:', uploadUrl);
+    console.log('[B2 S3] Authorization:', authorizationHeader.substring(0, 30) + '...');
+    console.log('[B2 S3] Date:', dateString);
+    console.log('[B2 S3] Content-MD5:', contentMD5);
+    
+    onProgress?.(40);
+    console.log('[B2 S3] Starting upload...');
     const uploadStartTime = Date.now();
-    const uploadResponse = await fetch(uploadUrl.uploadUrl, {
-      method: 'POST',
+    
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
       headers: {
-        'Authorization': uploadUrl.authorizationToken,
-        'X-Bz-File-Name': encodeURIComponent(finalFileName),
+        'Authorization': authorizationHeader,
         'Content-Type': contentType,
-        'Content-Length': arrayBuffer.byteLength.toString(),
-        'X-Bz-Content-Sha1': sha1Hash,
+        'Content-MD5': contentMD5,
+        'Date': dateString,
+        'x-amz-acl': 'public-read',
       },
       body: arrayBuffer,
     });
+    
     const uploadEndTime = Date.now();
     const uploadDuration = (uploadEndTime - uploadStartTime) / 1000;
 
-    console.log('[B2 Direct] Upload response received in', uploadDuration.toFixed(2), 'seconds');
-    console.log('[B2 Direct] Response status:', uploadResponse.status);
-    console.log('[B2 Direct] Response ok:', uploadResponse.ok);
-    console.log('[B2 Direct] Response status text:', uploadResponse.statusText);
+    console.log('[B2 S3] Upload complete in', uploadDuration.toFixed(2), 'seconds');
+    console.log('[B2 S3] Response status:', uploadResponse.status, uploadResponse.statusText);
+    console.log('[B2 S3] Response headers:');
+    uploadResponse.headers.forEach((value, key) => {
+      console.log(`[B2 S3]   ${key}: ${value}`);
+    });
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text();
-      console.error('[B2 Direct] ❌ Upload failed!');
-      console.error('[B2 Direct] Status:', uploadResponse.status);
-      console.error('[B2 Direct] Error:', errorText);
+      console.error('[B2 S3] ❌ Upload failed!');
+      console.error('[B2 S3] Status:', uploadResponse.status);
+      console.error('[B2 S3] Error body:', errorText);
       
-      if (uploadResponse.status === 401) {
-        console.log('[B2 Direct] Clearing cached auth due to 401');
-        cachedAuth = null;
-        authExpiry = 0;
+      if (uploadResponse.status === 0 || errorText.includes('CORS')) {
+        throw new Error(`CORS ERROR: Your B2 bucket "${B2_BUCKET_NAME}" needs CORS configuration. See console logs for details.`);
       }
       
-      throw new Error(`B2 upload failed: ${uploadResponse.status} - ${errorText}`);
+      throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
     }
 
-    const uploadResult = await uploadResponse.json();
-    console.log('[B2 Direct] ✅ Step 5/6 complete');
-    console.log('[B2 Direct] Upload result:', JSON.stringify(uploadResult, null, 2));
-    
-    console.log('[B2 Direct] Step 6/6: Constructing public URL...');
     const publicUrl = `https://f005.backblazeb2.com/file/${B2_BUCKET_NAME}/${finalFileName}`;
-    console.log('[B2 Direct] ✅ Step 6/6 complete');
-    console.log('[B2 Direct] ============================================');
-    console.log('[B2 Direct] ✅✅✅ UPLOAD SUCCESSFUL ✅✅✅');
-    console.log('[B2 Direct] Public URL:', publicUrl);
-    console.log('[B2 Direct] Total time:', uploadDuration.toFixed(2), 'seconds');
-    console.log('[B2 Direct] Upload speed:', ((file.size / 1024 / 1024) / uploadDuration).toFixed(2), 'MB/s');
-    console.log('[B2 Direct] ============================================');
+    console.log('[B2 S3] ============================================');
+    console.log('[B2 S3] ✅✅✅ UPLOAD SUCCESSFUL ✅✅✅');
+    console.log('[B2 S3] Public URL:', publicUrl);
+    console.log('[B2 S3] Upload speed:', ((file.size / 1024 / 1024) / uploadDuration).toFixed(2), 'MB/s');
+    console.log('[B2 S3] ============================================');
     
     onProgress?.(100);
     return publicUrl;
   } catch (error: any) {
-    console.error('[B2 Direct] ============================================');
-    console.error('[B2 Direct] ❌❌❌ UPLOAD FAILED ❌❌❌');
-    console.error('[B2 Direct] Error type:', typeof error);
-    console.error('[B2 Direct] Error name:', error?.name);
-    console.error('[B2 Direct] Error message:', error?.message);
-    console.error('[B2 Direct] Error code:', error?.code);
-    console.error('[B2 Direct] Error stack:', error?.stack);
-    console.error('[B2 Direct] Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
-    console.error('[B2 Direct] ============================================');
+    console.error('[B2 S3] ============================================');
+    console.error('[B2 S3] ❌❌❌ UPLOAD FAILED ❌❌❌');
+    console.error('[B2 S3] Error:', error?.message);
+    console.error('[B2 S3] Error name:', error?.name);
+    console.error('[B2 S3] ============================================');
     
-    if (error?.message?.includes('Failed to fetch') || error?.message?.includes('NetworkError') || error?.name === 'TypeError') {
-      console.error('[B2 Direct] This is a network/fetch error');
-      console.error('[B2 Direct] Possible causes:');
-      console.error('[B2 Direct]   - Network connectivity issues');
-      console.error('[B2 Direct]   - CORS issues (web only)');
-      console.error('[B2 Direct]   - Request timeout');
-      console.error('[B2 Direct]   - SSL/TLS certificate issues');
-      throw new Error('Network error during upload. Please check your connection and try again.');
+    if (error?.message?.includes('Failed to fetch') || error?.name === 'TypeError') {
+      console.error('[B2 S3] This is a CORS/network error!');
+      console.error('[B2 S3]');
+      console.error('[B2 S3] ACTION REQUIRED:');
+      console.error('[B2 S3] 1. Go to Backblaze B2 Console');
+      console.error('[B2 S3] 2. Select bucket:', B2_BUCKET_NAME);
+      console.error('[B2 S3] 3. Go to "Bucket Settings" > "CORS Rules"');
+      console.error('[B2 S3] 4. Add this CORS rule:');
+      console.error('[B2 S3]');
+      console.error('[B2 S3] {');
+      console.error('[B2 S3]   "corsRuleName": "allowWebUpload",');
+      console.error('[B2 S3]   "allowedOrigins": ["*"],');
+      console.error('[B2 S3]   "allowedOperations": ["s3_put", "s3_post", "s3_get"],');
+      console.error('[B2 S3]   "allowedHeaders": ["*"],');
+      console.error('[B2 S3]   "exposeHeaders": ["ETag"],');
+      console.error('[B2 S3]   "maxAgeSeconds": 3600');
+      console.error('[B2 S3] }');
+      console.error('[B2 S3]');
+      throw new Error(`CORS ERROR: Cannot upload from browser. Your B2 bucket "${B2_BUCKET_NAME}" must have CORS configured. Check the debug logs for instructions.`);
     }
     
     throw error;
