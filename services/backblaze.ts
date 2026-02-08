@@ -176,36 +176,89 @@ function computeSha1(arrayBuffer: ArrayBuffer): string {
   return hash.toString(CryptoJS.enc.Hex);
 }
 
-async function testBucketAccess(): Promise<{ success: boolean; message: string }> {
-  console.log('[B2 Test] Testing bucket accessibility...');
+export async function testBucketAccess(): Promise<{ success: boolean; message: string; details?: string }> {
+  console.log('[B2 Test] ============================================');
+  console.log('[B2 Test] TESTING BUCKET CONNECTIVITY');
+  console.log('[B2 Test] Endpoint:', B2_ENDPOINT);
+  console.log('[B2 Test] Bucket:', B2_BUCKET_NAME);
   
   try {
-    const testUrl = `https://${B2_ENDPOINT}/${B2_BUCKET_NAME}/`;
+    const testUrl = `https://${B2_ENDPOINT}/${B2_BUCKET_NAME}/test.txt`;
     console.log('[B2 Test] Test URL:', testUrl);
+    console.log('[B2 Test] Attempting OPTIONS preflight...');
     
     const response = await fetch(testUrl, {
-      method: 'HEAD',
+      method: 'OPTIONS',
+      headers: {
+        'Origin': typeof window !== 'undefined' ? window.location.origin : 'https://app.rork.app',
+        'Access-Control-Request-Method': 'PUT',
+        'Access-Control-Request-Headers': 'authorization,content-type,content-md5,date,x-amz-acl',
+      },
     });
     
-    console.log('[B2 Test] Response status:', response.status);
+    console.log('[B2 Test] OPTIONS Response status:', response.status);
+    console.log('[B2 Test] OPTIONS Response headers:');
+    response.headers.forEach((value, key) => {
+      console.log(`[B2 Test]   ${key}: ${value}`);
+    });
     
     if (response.status === 0) {
+      console.error('[B2 Test] ❌ Status 0 - CORS preflight was blocked by browser');
       return {
         success: false,
-        message: 'CORS not configured: The browser blocked the request. You must add CORS rules to your B2 bucket.'
+        message: '❌ CORS NOT CONFIGURED',
+        details: 'Browser blocked the request. CORS rules are missing or incorrect on your B2 bucket.'
       };
     }
     
-    return { success: true, message: 'Bucket is accessible' };
-  } catch (error: any) {
-    console.error('[B2 Test] Error:', error?.message);
-    if (error?.message?.includes('Failed to fetch')) {
+    const corsHeader = response.headers.get('access-control-allow-origin');
+    const methodsHeader = response.headers.get('access-control-allow-methods');
+    const headersHeader = response.headers.get('access-control-allow-headers');
+    
+    console.log('[B2 Test] CORS Headers:');
+    console.log('[B2 Test]   Allow-Origin:', corsHeader || 'MISSING');
+    console.log('[B2 Test]   Allow-Methods:', methodsHeader || 'MISSING');
+    console.log('[B2 Test]   Allow-Headers:', headersHeader || 'MISSING');
+    
+    if (!corsHeader) {
       return {
         success: false,
-        message: 'CORS ERROR: Your B2 bucket must have CORS rules configured to allow browser uploads.'
+        message: '❌ CORS HEADERS MISSING',
+        details: 'The bucket responded, but CORS headers are not present. Add CORS rules to your bucket.'
       };
     }
-    return { success: false, message: error?.message || 'Unknown error' };
+    
+    if (!methodsHeader?.includes('PUT')) {
+      return {
+        success: false,
+        message: '❌ PUT METHOD NOT ALLOWED',
+        details: `CORS allows: ${methodsHeader}. You need to add "s3_put" to allowed operations.`
+      };
+    }
+    
+    console.log('[B2 Test] ✅ CORS is properly configured!');
+    return { 
+      success: true, 
+      message: '✅ Bucket is accessible with proper CORS',
+      details: `Origin: ${corsHeader}, Methods: ${methodsHeader}`
+    };
+  } catch (error: any) {
+    console.error('[B2 Test] ❌ Exception during test:', error?.message);
+    console.error('[B2 Test] Error name:', error?.name);
+    console.error('[B2 Test] Error stack:', error?.stack);
+    
+    if (error?.message?.includes('Failed to fetch') || error?.name === 'TypeError') {
+      return {
+        success: false,
+        message: '❌ NETWORK/CORS ERROR',
+        details: 'Cannot connect to B2. This is usually a CORS configuration issue. The browser is blocking the request.'
+      };
+    }
+    return { 
+      success: false, 
+      message: '❌ CONNECTION FAILED',
+      details: error?.message || 'Unknown error'
+    };
   }
 }
 

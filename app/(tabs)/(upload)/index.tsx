@@ -26,7 +26,7 @@ import {
   SupabaseSoundscape,
   SupabaseChakra,
 } from '@/services/supabase';
-import { uploadToB2 } from '@/services/backblaze';
+import { uploadToB2, testBucketAccess } from '@/services/backblaze';
 import MultiSelectSection from '@/components/upload/MultiSelectSection';
 
 interface SelectedFile {
@@ -73,6 +73,7 @@ export default function UploadScreen() {
   const [showIntensityPicker, setShowIntensityPicker] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
   const { data: modalities = [], isLoading: loadingModalities } = useQuery<SupabaseModality[]>({
@@ -399,6 +400,26 @@ export default function UploadScreen() {
     setExpandedSection(prev => prev === section ? null : section);
   }, []);
 
+  const testConnection = useCallback(async () => {
+    addLog('Testing B2 connection...');
+    setConnectionTestResult(null);
+    try {
+      const result = await testBucketAccess();
+      setConnectionTestResult(result);
+      addLog(`Test result: ${result.message}`);
+      if (result.details) {
+        addLog(`Details: ${result.details}`);
+      }
+    } catch (error: any) {
+      addLog(`Test failed: ${error?.message}`);
+      setConnectionTestResult({
+        success: false,
+        message: '❌ Test failed',
+        details: error?.message
+      });
+    }
+  }, [addLog]);
+
 
 
   return (
@@ -407,6 +428,37 @@ export default function UploadScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Upload Track</Text>
           <Text style={styles.headerSubtitle}>Add a new meditation track to the library</Text>
+        </View>
+
+        <View style={styles.testSection}>
+          <TouchableOpacity
+            style={styles.testButton}
+            onPress={testConnection}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.testButtonText}>🔍 Test B2 Connection</Text>
+          </TouchableOpacity>
+          {connectionTestResult && (
+            <View style={[
+              styles.testResult,
+              connectionTestResult.success ? styles.testResultSuccess : styles.testResultError
+            ]}>
+              <Text style={[
+                styles.testResultText,
+                connectionTestResult.success ? styles.testResultTextSuccess : styles.testResultTextError
+              ]}>
+                {connectionTestResult.message}
+              </Text>
+              {connectionTestResult.details && (
+                <Text style={[
+                  styles.testResultDetails,
+                  connectionTestResult.success ? styles.testResultTextSuccess : styles.testResultTextError
+                ]}>
+                  {connectionTestResult.details}
+                </Text>
+              )}
+            </View>
+          )}
         </View>
 
         <View style={styles.inputGroup}>
@@ -929,5 +981,50 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     color: '#00ff00',
     marginBottom: 4,
+  },
+  testSection: {
+    marginBottom: 20,
+  },
+  testButton: {
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  testButtonText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.dark.text,
+  },
+  testResult: {
+    marginTop: 12,
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 2,
+  },
+  testResultSuccess: {
+    backgroundColor: '#0a3d2a',
+    borderColor: '#14b45c',
+  },
+  testResultError: {
+    backgroundColor: '#3d0a0a',
+    borderColor: '#b41414',
+  },
+  testResultText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    marginBottom: 4,
+  },
+  testResultTextSuccess: {
+    color: '#14b45c',
+  },
+  testResultTextError: {
+    color: '#ff4444',
+  },
+  testResultDetails: {
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
