@@ -438,27 +438,6 @@ export default function UploadScreen() {
           >
             <Text style={styles.testButtonText}>🔍 Test B2 Connection</Text>
           </TouchableOpacity>
-          {connectionTestResult && (
-            <View style={[
-              styles.testResult,
-              connectionTestResult.success ? styles.testResultSuccess : styles.testResultError
-            ]}>
-              <Text style={[
-                styles.testResultText,
-                connectionTestResult.success ? styles.testResultTextSuccess : styles.testResultTextError
-              ]}>
-                {connectionTestResult.message}
-              </Text>
-              {connectionTestResult.details && (
-                <Text style={[
-                  styles.testResultDetails,
-                  connectionTestResult.success ? styles.testResultTextSuccess : styles.testResultTextError
-                ]}>
-                  {connectionTestResult.details}
-                </Text>
-              )}
-            </View>
-          )}
         </View>
 
         <View style={styles.inputGroup}>
