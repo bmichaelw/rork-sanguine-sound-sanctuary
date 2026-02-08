@@ -93,18 +93,7 @@ export default function UploadScreen() {
     queryFn: fetchChakras,
   });
 
-  const convertDurationToSeconds = (durationString: string): number => {
-    const parts = durationString.trim().split(':');
-    if (parts.length !== 2) {
-      throw new Error('Duration must be in MM:SS format');
-    }
-    const minutes = parseInt(parts[0], 10);
-    const seconds = parseInt(parts[1], 10);
-    if (isNaN(minutes) || isNaN(seconds)) {
-      throw new Error('Invalid duration format');
-    }
-    return minutes * 60 + seconds;
-  };
+
 
   const resetForm = useCallback(() => {
     setTitle('');
@@ -139,7 +128,12 @@ export default function UploadScreen() {
         throw new Error('Audio file is required');
       }
       if (!duration.trim()) {
-        throw new Error('Duration is required (format: MM:SS)');
+        throw new Error('Duration is required (in seconds)');
+      }
+
+      const durationInSeconds = parseInt(duration.trim(), 10);
+      if (isNaN(durationInSeconds) || durationInSeconds <= 0) {
+        throw new Error('Duration must be a valid positive number');
       }
 
       setUploadStatus('Reading audio file...');
@@ -227,9 +221,7 @@ export default function UploadScreen() {
 
       setUploadStatus('Creating track in database...');
       console.log('[Upload] Creating track record...');
-
-      const durationInSeconds = convertDurationToSeconds(duration);
-      console.log('[Upload] Duration converted:', duration, '->', durationInSeconds, 'seconds');
+      console.log('[Upload] Duration:', durationInSeconds, 'seconds');
 
       const { data: track, error: trackError } = await supabase
         .from('tracks')
@@ -487,13 +479,14 @@ export default function UploadScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Duration * (MM:SS)</Text>
+          <Text style={styles.label}>Duration * (seconds)</Text>
           <TextInput
             style={styles.textInput}
             value={duration}
             onChangeText={setDuration}
-            placeholder="e.g. 12:34"
+            placeholder="e.g. 754"
             placeholderTextColor={Colors.dark.textMuted}
+            keyboardType="numeric"
           />
         </View>
 
