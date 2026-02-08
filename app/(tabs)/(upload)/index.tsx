@@ -72,6 +72,8 @@ export default function UploadScreen() {
   const [expandedSection, setExpandedSection] = useState<string | null>('modalities');
   const [showIntensityPicker, setShowIntensityPicker] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>('');
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const scrollViewRef = React.useRef<ScrollView>(null);
 
   const { data: modalities = [], isLoading: loadingModalities } = useQuery<SupabaseModality[]>({
     queryKey: ['modalities'],
@@ -95,6 +97,13 @@ export default function UploadScreen() {
 
 
 
+  const addLog = useCallback((message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(logMessage);
+    setDebugLogs(prev => [...prev, logMessage]);
+  }, []);
+
   const resetForm = useCallback(() => {
     setTitle('');
     setDuration('');
@@ -115,11 +124,12 @@ export default function UploadScreen() {
     setSelectedSoundscapes([]);
     setSelectedChakras([]);
     setUploadStatus('');
+    setDebugLogs([]);
   }, []);
 
   const uploadMutation = useMutation({
     mutationFn: async () => {
-      console.log('[Upload] Starting upload process...');
+      addLog('Starting upload process...');
       
       if (!title.trim()) {
         throw new Error('Title is required');
@@ -137,28 +147,33 @@ export default function UploadScreen() {
       }
 
       setUploadStatus('Reading audio file...');
-      console.log('[Upload] Audio file:', { name: audioFile.name, uri: audioFile.uri.substring(0, 50), mimeType: audioFile.mimeType });
+      addLog(`Audio file: ${audioFile.name}, size: ${audioFile.size}, type: ${audioFile.mimeType}`);
+      addLog(`Audio URI (first 80 chars): ${audioFile.uri.substring(0, 80)}`);
 
       let audioBlob: Blob;
       try {
-        console.log('[Upload] Fetching audio file from URI...');
+        addLog('Fetching audio file from URI...');
         const audioResponse = await fetch(audioFile.uri);
+        addLog(`Fetch response status: ${audioResponse.status} ${audioResponse.statusText}`);
         if (!audioResponse.ok) {
           throw new Error(`Failed to read audio file: ${audioResponse.status}`);
         }
         audioBlob = await audioResponse.blob();
-        console.log('[Upload] Audio blob created, size:', audioBlob.size);
+        addLog(`Audio blob created, size: ${audioBlob.size} bytes (${(audioBlob.size / (1024 * 1024)).toFixed(2)} MB)`);
         
         if (audioBlob.size === 0) {
           throw new Error('Audio file is empty');
         }
       } catch (err: any) {
-        console.error('[Upload] Error reading audio file:', err?.message);
+        addLog(`ERROR reading audio file: ${err?.message}`);
         throw new Error('Failed to read audio file. Please try again.');
       }
 
       setUploadStatus('Uploading audio to Backblaze B2...');
-      console.log('[Upload] Uploading audio to B2...');
+      addLog('Starting B2 upload...');
+      addLog(`B2 Config - Bucket: ${process.env.EXPO_PUBLIC_B2_BUCKET_NAME}`);
+      addLog(`B2 Config - Key ID exists: ${!!process.env.EXPO_PUBLIC_B2_KEY_ID}`);
+      addLog(`B2 Config - App Key exists: ${!!process.env.EXPO_PUBLIC_B2_APP_KEY}`);
       
       let fileUrl: string;
       try {
@@ -169,23 +184,27 @@ export default function UploadScreen() {
           (progress) => {
             if (progress < 30) {
               setUploadStatus('Preparing audio upload...');
+              addLog(`Upload progress: ${progress}%`);
             } else if (progress < 90) {
               setUploadStatus(`Uploading audio... ${progress}%`);
+              if (progress % 20 === 0) addLog(`Upload progress: ${progress}%`);
             } else {
               setUploadStatus('Finalizing audio upload...');
+              addLog(`Upload progress: ${progress}%`);
             }
           }
         );
-        console.log('[Upload] B2 audio upload successful:', fileUrl);
+        addLog(`B2 upload SUCCESS! URL: ${fileUrl}`);
       } catch (err: any) {
-        console.error('[Upload] B2 audio upload failed:', err?.message);
+        addLog(`B2 upload FAILED: ${err?.message}`);
+        addLog(`Error details: ${JSON.stringify(err)}`);
         throw new Error(err?.message || 'Failed to upload audio file');
       }
 
       let finalImageUrl: string | null = null;
       if (imageInputMode === 'upload' && imageFile) {
         setUploadStatus('Uploading image to Backblaze B2...');
-        console.log('[Upload] Uploading image to B2...');
+        addLog('Uploading image to B2...');
         
         try {
           const imageResponse = await fetch(imageFile.uri);
@@ -193,7 +212,7 @@ export default function UploadScreen() {
             throw new Error(`Failed to read image file: ${imageResponse.status}`);
           }
           const imageBlob = await imageResponse.blob();
-          console.log('[Upload] Image blob created, size:', imageBlob.size);
+          addLog(`Image blob created, size: ${imageBlob.size} bytes`);
           
           finalImageUrl = await uploadToB2(
             imageBlob,
@@ -209,19 +228,19 @@ export default function UploadScreen() {
               }
             }
           );
-          console.log('[Upload] B2 image upload successful:', finalImageUrl);
+          addLog(`Image upload SUCCESS! URL: ${finalImageUrl}`);
         } catch (err: any) {
-          console.error('[Upload] B2 image upload failed:', err?.message);
+          addLog(`Image upload FAILED: ${err?.message}`);
           throw new Error(`Image upload failed: ${err?.message || 'Unknown error'}`);
         }
       } else if (imageInputMode === 'url' && imageUrl.trim()) {
         finalImageUrl = imageUrl.trim();
-        console.log('[Upload] Using provided image URL:', finalImageUrl);
+        addLog(`Using provided image URL: ${finalImageUrl}`);
       }
 
       setUploadStatus('Creating track in database...');
-      console.log('[Upload] Creating track record...');
-      console.log('[Upload] Duration:', durationInSeconds, 'seconds');
+      addLog('Creating track record in Supabase...');
+      addLog(`Duration: ${durationInSeconds} seconds`);
 
       const { data: track, error: trackError } = await supabase
         .from('tracks')
@@ -244,14 +263,15 @@ export default function UploadScreen() {
         .single();
 
       if (trackError) {
-        console.error('[Upload] Track insert error:', trackError);
+        addLog(`Track insert ERROR: ${trackError.message}`);
+        addLog(`Error details: ${JSON.stringify(trackError)}`);
         throw new Error(`Failed to create track: ${trackError.message}`);
       }
 
-      console.log('[Upload] Track created with ID:', track.id);
+      addLog(`Track created successfully! ID: ${track.id}`);
 
       setUploadStatus('Saving metadata...');
-      console.log('[Upload] Saving join table entries...');
+      addLog('Saving join table entries (modalities, intentions, etc)...');
 
       const insertPromises = [];
 
@@ -289,13 +309,16 @@ export default function UploadScreen() {
 
       if (insertPromises.length > 0) {
         await Promise.all(insertPromises);
-        console.log('[Upload] Metadata saved');
+        addLog('Metadata saved successfully!');
+      } else {
+        addLog('No metadata to save');
       }
 
+      addLog('✅ UPLOAD COMPLETE!');
       return track;
     },
     onSuccess: (track) => {
-      console.log('[Upload] Upload complete!', track.id);
+      addLog(`✅ Success! Track ${track.id} uploaded`);
       setUploadStatus('');
       queryClient.invalidateQueries({ queryKey: ['tracks'] });
       queryClient.invalidateQueries({ queryKey: ['libraryStats'] });
@@ -304,7 +327,7 @@ export default function UploadScreen() {
       ]);
     },
     onError: (error: any) => {
-      console.error('[Upload] Error:', error?.message);
+      addLog(`❌ UPLOAD FAILED: ${error?.message}`);
       setUploadStatus('');
       Alert.alert('Upload Failed', error?.message || 'An error occurred');
     },
@@ -641,6 +664,28 @@ export default function UploadScreen() {
           toggleSelection={toggleSelection}
         />
 
+        {debugLogs.length > 0 && (
+          <View style={styles.debugContainer}>
+            <View style={styles.debugHeader}>
+              <Text style={styles.debugTitle}>Upload Logs</Text>
+              <TouchableOpacity onPress={() => setDebugLogs([])} activeOpacity={0.7}>
+                <Text style={styles.clearLogsButton}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              style={styles.debugLogContainer}
+              ref={scrollViewRef}
+              onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            >
+              {debugLogs.map((log, index) => (
+                <Text key={index} style={styles.debugLogText}>
+                  {log}
+                </Text>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         <View style={styles.footer} />
       </ScrollView>
 
@@ -848,5 +893,41 @@ const styles = StyleSheet.create({
   },
   toggleModeTextActive: {
     color: Colors.dark.text,
+  },
+  debugContainer: {
+    marginTop: 20,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.border,
+  },
+  debugHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: Colors.dark.text,
+  },
+  clearLogsButton: {
+    fontSize: 13,
+    color: Colors.dark.primary,
+    fontWeight: '500' as const,
+  },
+  debugLogContainer: {
+    maxHeight: 250,
+    backgroundColor: '#000',
+    borderRadius: 8,
+    padding: 10,
+  },
+  debugLogText: {
+    fontSize: 11,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#00ff00',
+    marginBottom: 4,
   },
 });
