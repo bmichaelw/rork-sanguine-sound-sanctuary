@@ -93,6 +93,19 @@ export default function UploadScreen() {
     queryFn: fetchChakras,
   });
 
+  const convertDurationToSeconds = (durationString: string): number => {
+    const parts = durationString.trim().split(':');
+    if (parts.length !== 2) {
+      throw new Error('Duration must be in MM:SS format');
+    }
+    const minutes = parseInt(parts[0], 10);
+    const seconds = parseInt(parts[1], 10);
+    if (isNaN(minutes) || isNaN(seconds)) {
+      throw new Error('Invalid duration format');
+    }
+    return minutes * 60 + seconds;
+  };
+
   const resetForm = useCallback(() => {
     setTitle('');
     setDuration('');
@@ -215,6 +228,9 @@ export default function UploadScreen() {
       setUploadStatus('Creating track in database...');
       console.log('[Upload] Creating track record...');
 
+      const durationInSeconds = convertDurationToSeconds(duration);
+      console.log('[Upload] Duration converted:', duration, '->', durationInSeconds, 'seconds');
+
       const { data: track, error: trackError } = await supabase
         .from('tracks')
         .insert({
@@ -222,7 +238,7 @@ export default function UploadScreen() {
           artist_id: 1,
           file_url: fileUrl,
           image_url: finalImageUrl,
-          duration: duration.trim(),
+          duration: durationInSeconds,
           is_sample: isSample,
           intensity: intensity,
           words: words,
