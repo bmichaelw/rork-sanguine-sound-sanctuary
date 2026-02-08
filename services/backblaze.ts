@@ -176,6 +176,39 @@ function computeSha1(arrayBuffer: ArrayBuffer): string {
   return hash.toString(CryptoJS.enc.Hex);
 }
 
+async function testBucketAccess(): Promise<{ success: boolean; message: string }> {
+  console.log('[B2 Test] Testing bucket accessibility...');
+  
+  try {
+    const testUrl = `https://${B2_ENDPOINT}/${B2_BUCKET_NAME}/`;
+    console.log('[B2 Test] Test URL:', testUrl);
+    
+    const response = await fetch(testUrl, {
+      method: 'HEAD',
+    });
+    
+    console.log('[B2 Test] Response status:', response.status);
+    
+    if (response.status === 0) {
+      return {
+        success: false,
+        message: 'CORS not configured: The browser blocked the request. You must add CORS rules to your B2 bucket.'
+      };
+    }
+    
+    return { success: true, message: 'Bucket is accessible' };
+  } catch (error: any) {
+    console.error('[B2 Test] Error:', error?.message);
+    if (error?.message?.includes('Failed to fetch')) {
+      return {
+        success: false,
+        message: 'CORS ERROR: Your B2 bucket must have CORS rules configured to allow browser uploads.'
+      };
+    }
+    return { success: false, message: error?.message || 'Unknown error' };
+  }
+}
+
 export async function uploadToB2(
   file: Blob,
   fileName: string,
@@ -202,6 +235,41 @@ export async function uploadToB2(
   const MAX_SIZE = 500 * 1024 * 1024;
   if (file.size > MAX_SIZE) {
     throw new Error(`File too large. Maximum size is ${MAX_SIZE / 1024 / 1024}MB`);
+  }
+
+  console.log('[B2 S3] Running pre-flight check...');
+  const accessTest = await testBucketAccess();
+  console.log('[B2 S3] Pre-flight result:', accessTest.message);
+  
+  if (!accessTest.success) {
+    console.error('[B2 S3] ❌ Pre-flight check failed!');
+    console.error('[B2 S3]');
+    console.error('[B2 S3] ⚠️  CORS CONFIGURATION REQUIRED ⚠️');
+    console.error('[B2 S3]');
+    console.error('[B2 S3] Your Backblaze B2 bucket needs CORS configured.');
+    console.error('[B2 S3]');
+    console.error('[B2 S3] HOW TO FIX:');
+    console.error('[B2 S3] 1. Go to: https://secure.backblaze.com/b2_buckets.htm');
+    console.error('[B2 S3] 2. Click on bucket:', B2_BUCKET_NAME);
+    console.error('[B2 S3] 3. Click "Bucket Settings"');
+    console.error('[B2 S3] 4. Scroll to "CORS Rules" section');
+    console.error('[B2 S3] 5. Click "Add a CORS Rule"');
+    console.error('[B2 S3] 6. Paste this JSON:');
+    console.error('[B2 S3]');
+    console.error('[B2 S3] {');
+    console.error('[B2 S3]   "corsRuleName": "allowWebUpload",');
+    console.error('[B2 S3]   "allowedOrigins": ["*"],');
+    console.error('[B2 S3]   "allowedOperations": ["s3_put", "s3_get", "s3_head"],');
+    console.error('[B2 S3]   "allowedHeaders": ["*"],');
+    console.error('[B2 S3]   "exposeHeaders": ["ETag", "x-amz-request-id"],');
+    console.error('[B2 S3]   "maxAgeSeconds": 3600');
+    console.error('[B2 S3] }');
+    console.error('[B2 S3]');
+    console.error('[B2 S3] 7. Click "Save"');
+    console.error('[B2 S3] 8. Wait 1-2 minutes for changes to propagate');
+    console.error('[B2 S3] 9. Try uploading again');
+    console.error('[B2 S3]');
+    throw new Error(`❌ CORS NOT CONFIGURED: Your B2 bucket "${B2_BUCKET_NAME}" must have CORS rules. Check the debug logs above for step-by-step instructions.`);
   }
 
   try {
