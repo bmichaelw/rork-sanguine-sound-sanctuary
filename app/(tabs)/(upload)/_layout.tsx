@@ -1,6 +1,4 @@
-import { Stack, router } from 'expo-router';
-import { TouchableOpacity } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { Stack } from 'expo-router';
 import Colors from '@/constants/colors';
 
 export default function UploadLayout() {
@@ -23,15 +21,12 @@ export default function UploadLayout() {
         name="index"
         options={{
           title: 'Admin Dashboard',
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.replace('/(account)')}
-              style={{ marginLeft: 8 }}
-              activeOpacity={0.7}
-            >
-              <ArrowLeft color={Colors.dark.text} size={24} />
-            </TouchableOpacity>
-          ),
+        }}
+      />
+      <Stack.Screen
+        name="upload"
+        options={{
+          title: 'Upload Track',
         }}
       />
     </Stack>
