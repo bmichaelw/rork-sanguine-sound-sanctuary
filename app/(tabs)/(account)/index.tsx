@@ -35,7 +35,7 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { membership, setMembership } = useAudio();
-  const { user, isAuthenticated, signOut, isLoading } = useAuth();
+  const { user, isAuthenticated, signOut, isLoading, isAdmin } = useAuth();
   const [sleepTimer, setSleepTimer] = React.useState(false);
   const [notifications, setNotifications] = React.useState(true);
 
