@@ -101,6 +101,8 @@ export interface AudioState {
   duration: number;
   isLoading: boolean;
   isBuffering: boolean;
+  sleepTimerRemaining: number | null;
+  sleepTimerDuration: number | null;
 }
 
 const defaultFilters: FlowFilters = {
@@ -191,6 +193,10 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
   
+  const [sleepTimerRemaining, setSleepTimerRemaining] = useState<number | null>(null);
+  const [sleepTimerDuration, setSleepTimerDuration] = useState<number | null>(null);
+  const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const soundRef = useRef<Audio.Sound | null>(null);
   const isFlowModeRef = useRef(isFlowMode);
   const flowFiltersRef = useRef(flowFilters);
@@ -207,6 +213,36 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
   useEffect(() => {
     currentTrackRef.current = currentTrack;
   }, [currentTrack]);
+
+  const sleepTimerIsActive = sleepTimerRemaining !== null && sleepTimerRemaining > 0;
+
+  useEffect(() => {
+    if (sleepTimerIsActive) {
+      sleepTimerRef.current = setInterval(() => {
+        setSleepTimerRemaining(prev => {
+          if (prev === null || prev <= 1) {
+            if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+            console.log('[AudioProvider] Sleep timer expired, pausing playback');
+            if (soundRef.current) {
+              soundRef.current.pauseAsync().catch(err => {
+                console.error('[AudioProvider] Error pausing for sleep timer:', err);
+              });
+            }
+            setSleepTimerDuration(null);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => {
+      if (sleepTimerRef.current) {
+        clearInterval(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
+    };
+  }, [sleepTimerIsActive]);
 
   useEffect(() => {
     const setupAudioMode = async () => {
@@ -492,6 +528,23 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     setMembershipMutate({ isPaid, tier });
   }, [setMembershipMutate]);
 
+  const setSleepTimer = useCallback((minutes: number | null) => {
+    if (sleepTimerRef.current) {
+      clearInterval(sleepTimerRef.current);
+      sleepTimerRef.current = null;
+    }
+    if (minutes === null || minutes <= 0) {
+      console.log('[AudioProvider] Sleep timer cancelled');
+      setSleepTimerRemaining(null);
+      setSleepTimerDuration(null);
+    } else {
+      const seconds = minutes * 60;
+      console.log(`[AudioProvider] Sleep timer set for ${minutes} minutes (${seconds}s)`);
+      setSleepTimerDuration(seconds);
+      setSleepTimerRemaining(seconds);
+    }
+  }, []);
+
   return {
     currentTrack,
     isPlaying,
@@ -513,6 +566,9 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
     toggleSaveTrack,
     isTrackSaved,
     setMembership,
+    sleepTimerRemaining,
+    sleepTimerDuration,
+    setSleepTimer,
     getEligibleTracks,
     allTracks,
     allModalities,

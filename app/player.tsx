@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   GestureResponderEvent,
   LayoutChangeEvent,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,8 +22,9 @@ import {
   Pause, 
   SkipForward, 
   Heart,
-  Volume2,
   Repeat,
+  Moon,
+  X,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Colors from '@/constants/colors';
@@ -48,7 +50,12 @@ export default function PlayerScreen() {
     isBuffering,
     toggleSaveTrack,
     isTrackSaved,
+    sleepTimerRemaining,
+    sleepTimerDuration,
+    setSleepTimer,
   } = useAudio();
+
+  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
 
   const [progressBarWidth, setProgressBarWidth] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
@@ -155,6 +162,45 @@ export default function PlayerScreen() {
     }
   };
 
+  const SLEEP_TIMER_OPTIONS = [
+    { label: '5 min', minutes: 5 },
+    { label: '10 min', minutes: 10 },
+    { label: '15 min', minutes: 15 },
+    { label: '30 min', minutes: 30 },
+    { label: '45 min', minutes: 45 },
+    { label: '1 hour', minutes: 60 },
+    { label: '90 min', minutes: 90 },
+    { label: '2 hours', minutes: 120 },
+  ];
+
+  const handleSetSleepTimer = useCallback((minutes: number) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setSleepTimer(minutes);
+    setShowSleepTimerModal(false);
+  }, [setSleepTimer]);
+
+  const handleCancelSleepTimer = useCallback(() => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setSleepTimer(null);
+    setShowSleepTimerModal(false);
+  }, [setSleepTimer]);
+
+  const formatTimerDisplay = useCallback((seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) {
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, []);
+
+  const sleepTimerActive = sleepTimerRemaining !== null && sleepTimerRemaining > 0;
+
   if (!currentTrack) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -231,6 +277,25 @@ export default function PlayerScreen() {
         </View>
       </View>
 
+      {sleepTimerActive && (
+        <TouchableOpacity 
+          style={styles.sleepTimerBanner}
+          onPress={() => setShowSleepTimerModal(true)}
+          activeOpacity={0.7}
+        >
+          <Moon color={Colors.dark.accent} size={14} />
+          <Text style={styles.sleepTimerBannerText}>
+            Sleep in {formatTimerDisplay(sleepTimerRemaining!)}
+          </Text>
+          <TouchableOpacity
+            onPress={handleCancelSleepTimer}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <X color={Colors.dark.textMuted} size={14} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
+
       <View style={styles.progressContainer}>
         <TouchableOpacity
           activeOpacity={1}
@@ -256,50 +321,145 @@ export default function PlayerScreen() {
         )}
       </View>
 
-      <View style={[styles.controls, { paddingBottom: insets.bottom + 40 }]}>
-        <TouchableOpacity 
-          style={styles.secondaryButton}
-          onPress={handleSave}
-        >
-          <Heart 
-            color={isSaved ? Colors.dark.primary : Colors.dark.textMuted} 
-            size={24}
-            fill={isSaved ? Colors.dark.primary : 'transparent'}
-          />
-        </TouchableOpacity>
+      <View style={styles.controlsSection}>
+        <View style={styles.controlsAuxRow}>
+          <TouchableOpacity 
+            style={styles.auxButton}
+            onPress={handleSave}
+          >
+            <Heart 
+              color={isSaved ? Colors.dark.primary : Colors.dark.textMuted} 
+              size={20}
+              fill={isSaved ? Colors.dark.primary : 'transparent'}
+            />
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.playButton}
-          onPress={handlePlayPause}
-          activeOpacity={0.8}
-          disabled={isLoading}
-        >
-          <LinearGradient
-            colors={[Colors.dark.primaryGlow, 'transparent']}
-            style={StyleSheet.absoluteFill}
-          />
-          {isLoading ? (
-            <ActivityIndicator size="large" color={Colors.dark.primary} />
-          ) : isPlaying ? (
-            <Pause color={Colors.dark.primary} size={36} fill={Colors.dark.primary} />
-          ) : (
-            <Play color={Colors.dark.primary} size={36} fill={Colors.dark.primary} />
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.auxButton, sleepTimerActive && styles.auxButtonActive]}
+            onPress={() => setShowSleepTimerModal(true)}
+          >
+            <Moon 
+              color={sleepTimerActive ? Colors.dark.accent : Colors.dark.textMuted} 
+              size={20}
+            />
+          </TouchableOpacity>
+        </View>
 
-        {isFlowMode ? (
+        <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
           <TouchableOpacity 
             style={styles.secondaryButton}
-            onPress={handleSkip}
+            onPress={handleSave}
           >
-            <SkipForward color={Colors.dark.textMuted} size={24} />
+            <Heart 
+              color={isSaved ? Colors.dark.primary : Colors.dark.textMuted} 
+              size={24}
+              fill={isSaved ? Colors.dark.primary : 'transparent'}
+            />
           </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.secondaryButton}>
-            <Volume2 color={Colors.dark.textMuted} size={24} />
+
+          <TouchableOpacity 
+            style={styles.playButton}
+            onPress={handlePlayPause}
+            activeOpacity={0.8}
+            disabled={isLoading}
+          >
+            <LinearGradient
+              colors={[Colors.dark.primaryGlow, 'transparent']}
+              style={StyleSheet.absoluteFill}
+            />
+            {isLoading ? (
+              <ActivityIndicator size="large" color={Colors.dark.primary} />
+            ) : isPlaying ? (
+              <Pause color={Colors.dark.primary} size={36} fill={Colors.dark.primary} />
+            ) : (
+              <Play color={Colors.dark.primary} size={36} fill={Colors.dark.primary} />
+            )}
           </TouchableOpacity>
-        )}
+
+          {isFlowMode ? (
+            <TouchableOpacity 
+              style={styles.secondaryButton}
+              onPress={handleSkip}
+            >
+              <SkipForward color={Colors.dark.textMuted} size={24} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity 
+              style={styles.secondaryButton}
+              onPress={() => setShowSleepTimerModal(true)}
+            >
+              <Moon color={sleepTimerActive ? Colors.dark.accent : Colors.dark.textMuted} size={24} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
+
+      <Modal
+        visible={showSleepTimerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSleepTimerModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowSleepTimerModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Moon color={Colors.dark.accent} size={22} />
+              <Text style={styles.modalTitle}>Sleep Timer</Text>
+            </View>
+            {sleepTimerActive && (
+              <View style={styles.activeTimerDisplay}>
+                <Text style={styles.activeTimerLabel}>Time remaining</Text>
+                <Text style={styles.activeTimerValue}>
+                  {formatTimerDisplay(sleepTimerRemaining!)}
+                </Text>
+                <View style={styles.timerProgressBarBg}>
+                  <View 
+                    style={[
+                      styles.timerProgressBarFill, 
+                      { width: `${sleepTimerDuration ? (sleepTimerRemaining! / sleepTimerDuration) * 100 : 0}%` }
+                    ]} 
+                  />
+                </View>
+              </View>
+            )}
+            <View style={styles.timerOptionsGrid}>
+              {SLEEP_TIMER_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.minutes}
+                  style={[
+                    styles.timerOption,
+                    sleepTimerDuration === option.minutes * 60 && styles.timerOptionActive,
+                  ]}
+                  onPress={() => handleSetSleepTimer(option.minutes)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    styles.timerOptionText,
+                    sleepTimerDuration === option.minutes * 60 && styles.timerOptionTextActive,
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {sleepTimerActive && (
+              <TouchableOpacity 
+                style={styles.cancelTimerButton}
+                onPress={handleCancelSleepTimer}
+                activeOpacity={0.7}
+              >
+                <X size={16} color={Colors.dark.error} />
+                <Text style={styles.cancelTimerText}>Cancel Timer</Text>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -475,6 +635,155 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.dark.border,
     overflow: 'hidden',
+  },
+  controlsSection: {
+    marginTop: 20,
+  },
+  controlsAuxRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    marginBottom: 8,
+    display: 'none',
+  },
+  auxButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+  },
+  auxButtonActive: {
+    backgroundColor: Colors.dark.accentGlow,
+  },
+  sleepTimerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 40,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: Colors.dark.accentGlow,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 126, 200, 0.25)',
+  },
+  sleepTimerBannerText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.dark.accent,
+    letterSpacing: 0.3,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.dark.surfaceElevated,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 12,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.dark.border,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 24,
+  },
+  modalTitle: {
+    ...typography.title,
+    color: Colors.dark.text,
+  },
+  activeTimerDisplay: {
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.dark.accentGlow,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 126, 200, 0.2)',
+  },
+  activeTimerLabel: {
+    ...typography.caption,
+    color: Colors.dark.textMuted,
+    marginBottom: 6,
+  },
+  activeTimerValue: {
+    fontSize: 36,
+    fontWeight: '200' as const,
+    color: Colors.dark.accent,
+    letterSpacing: 2,
+    marginBottom: 12,
+  },
+  timerProgressBarBg: {
+    width: '100%',
+    height: 3,
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  timerProgressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.dark.accent,
+    borderRadius: 2,
+  },
+  timerOptionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  timerOption: {
+    width: '22.5%',
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.dark.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.dark.borderSubtle,
+  },
+  timerOptionActive: {
+    backgroundColor: Colors.dark.accentGlow,
+    borderColor: Colors.dark.accent,
+  },
+  timerOptionText: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: Colors.dark.textSecondary,
+  },
+  timerOptionTextActive: {
+    color: Colors.dark.accent,
+  },
+  cancelTimerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(200, 126, 126, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 126, 126, 0.2)',
+  },
+  cancelTimerText: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: Colors.dark.error,
   },
   emptyText: {
     ...typography.body,
