@@ -201,6 +201,7 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
   const isFlowModeRef = useRef(isFlowMode);
   const flowFiltersRef = useRef(flowFilters);
   const currentTrackRef = useRef(currentTrack);
+  const isLoadingRef = useRef(false);
 
   useEffect(() => {
     isFlowModeRef.current = isFlowMode;
@@ -396,6 +397,12 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
   }, [getEligibleTracks]);
 
   const loadAndPlayTrack = useCallback(async (track: Track) => {
+    if (isLoadingRef.current) {
+      console.log('[AudioProvider] Already loading, ignoring request for:', track.title);
+      return;
+    }
+
+    isLoadingRef.current = true;
     console.log('[AudioProvider] Loading track:', track.title);
     setIsLoading(true);
 
@@ -420,11 +427,13 @@ export const [AudioProvider, useAudio] = createContextHook(() => {
       soundRef.current = sound;
       setIsPlaying(true);
       setIsLoading(false);
+      isLoadingRef.current = false;
       console.log('[AudioProvider] Track loaded and playing');
     } catch (error) {
       console.error('[AudioProvider] Error loading track:', error);
       setIsLoading(false);
       setIsPlaying(false);
+      isLoadingRef.current = false;
     }
   }, [handlePlaybackStatusUpdate]);
 
