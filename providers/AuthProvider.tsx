@@ -58,7 +58,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     const initAuth = async () => {
       try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Session check timeout')), 10000);
+          setTimeout(() => reject(new Error('Session check timeout')), 30000);
         });
         
         const sessionPromise = supabase.auth.getSession();
