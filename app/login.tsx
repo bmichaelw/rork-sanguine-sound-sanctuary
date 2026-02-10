@@ -19,7 +19,7 @@ import { useAuth } from '@/providers/AuthProvider';
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle, isLoading } = useAuth();
+  const { signIn, signUp, isLoading } = useAuth();
   
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -78,19 +78,6 @@ export default function LoginScreen() {
       console.error('[Login] Error message:', err?.message);
       console.error('[Login] Error details:', JSON.stringify(err, null, 2));
       setError(err.message || 'An error occurred');
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    try {
-      await signInWithGoogle();
-      router.replace('/(tabs)/(listen)');
-    } catch (err: any) {
-      console.error('[Login] Google sign in error:', err);
-      if (!err.message?.includes('cancelled')) {
-        setError(err.message || 'Google sign in failed');
-      }
     }
   };
 
@@ -186,30 +173,6 @@ export default function LoginScreen() {
                 />
               </View>
             )}
-
-            <TouchableOpacity
-              style={[styles.googleButton, isLoading && styles.buttonDisabled]}
-              onPress={handleGoogleSignIn}
-              disabled={isLoading}
-              testID="google-sign-in-button"
-            >
-              {isLoading ? (
-                <ActivityIndicator color={Colors.dark.text} size="small" />
-              ) : (
-                <>
-                  <View style={styles.googleIcon}>
-                    <Text style={styles.googleIconText}>G</Text>
-                  </View>
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
 
             <TouchableOpacity
               style={[styles.submitButton, isLoading && styles.buttonDisabled]}
@@ -319,51 +282,6 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     padding: 4,
-  },
-  googleButton: {
-    backgroundColor: Colors.dark.surface,
-    borderRadius: 14,
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: Colors.dark.border,
-  },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  googleIconText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#4285F4',
-  },
-  googleButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.dark.text,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.dark.border,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    color: Colors.dark.textMuted,
   },
   submitButton: {
     backgroundColor: Colors.dark.primary,
