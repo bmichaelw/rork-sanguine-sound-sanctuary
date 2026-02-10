@@ -25,6 +25,12 @@ function RootLayoutNav() {
         }} 
       />
       <Stack.Screen 
+        name="auth/callback" 
+        options={{ 
+          headerShown: false,
+        }} 
+      />
+      <Stack.Screen 
         name="player" 
         options={{ 
           headerShown: false,

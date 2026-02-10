@@ -169,7 +169,9 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     mutationFn: async () => {
       console.log('[Auth] Starting Google sign in...');
       
-      const redirectUrl = Linking.createURL('auth/callback');
+      const redirectUrl = Platform.OS === 'web' 
+        ? `${window.location.origin}/auth/callback`
+        : Linking.createURL('/auth/callback');
       
       console.log('[Auth] OAuth redirect URL:', redirectUrl);
 
@@ -187,19 +189,22 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       }
 
       if (Platform.OS !== 'web' && data?.url) {
-        console.log('[Auth] Opening OAuth URL...');
+        console.log('[Auth] Opening OAuth URL with redirect:', redirectUrl);
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
           redirectUrl
         );
 
+        console.log('[Auth] OAuth result type:', result.type);
+
         if (result.type === 'success' && result.url) {
-          console.log('[Auth] OAuth callback received');
+          console.log('[Auth] OAuth callback received:', result.url);
           const url = new URL(result.url);
-          const access_token = url.searchParams.get('access_token');
-          const refresh_token = url.searchParams.get('refresh_token');
+          const access_token = url.searchParams.get('access_token') || url.hash.match(/access_token=([^&]+)/)?.[1];
+          const refresh_token = url.searchParams.get('refresh_token') || url.hash.match(/refresh_token=([^&]+)/)?.[1];
 
           if (access_token && refresh_token) {
+            console.log('[Auth] Setting session with tokens...');
             const { error: sessionError } = await supabase.auth.setSession({
               access_token,
               refresh_token,
@@ -212,6 +217,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
             console.log('[Auth] Google sign in successful');
           } else {
+            console.error('[Auth] No access token found. URL:', result.url);
             throw new Error('No access token received from OAuth');
           }
         } else if (result.type === 'cancel') {
