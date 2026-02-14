@@ -57,12 +57,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     
     const initAuth = async () => {
       try {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Session check timeout')), 30000);
-        });
-        
-        const sessionPromise = supabase.auth.getSession();
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]) as Awaited<typeof sessionPromise>;
+        const { data: { session } } = await supabase.auth.getSession();
         
         console.log('[Auth] Initial session:', session?.user?.email || 'none');
         
